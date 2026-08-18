@@ -106,6 +106,60 @@ body {
     white-space: nowrap;
 }
 
+/* STAKE STYLE WIN MULTIPLIER POPUP */
+.stake-win-card {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0);
+    z-index: 50;
+    pointer-events: none;
+    opacity: 0;
+}
+
+.win-card-inner {
+    background: #0d1e16;
+    border: 3px solid #00e701;
+    border-radius: 12px;
+    padding: 12px 24px;
+    min-width: 160px;
+    text-align: center;
+    box-shadow: 0 0 35px rgba(0, 231, 1, 0.5), inset 0 0 15px rgba(0, 231, 1, 0.2);
+}
+
+.win-multiplier {
+    font-size: 26px;
+    font-weight: 900;
+    color: #00e701;
+    letter-spacing: 0.5px;
+    line-height: 1.1;
+    text-shadow: 0 0 12px rgba(0, 231, 1, 0.8);
+}
+
+.win-divider {
+    width: 100%;
+    height: 1.5px;
+    background: #1b4329;
+    margin: 6px 0;
+}
+
+.win-payout-box {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.payout-amt {
+    font-size: 14px;
+    font-weight: 900;
+    color: #00e701;
+}
+
+.crypto-icon {
+    font-size: 13px;
+}
+
 .decision-overlay {
     position: absolute;
     bottom: 8px;
@@ -145,7 +199,7 @@ body {
     cursor: not-allowed;
 }
 
-/* Control Dashboard */
+/* Controls */
 .control-dashboard {
     background: #0b1420;
     border-radius: 12px;
@@ -184,14 +238,6 @@ body {
     color: #00e7ff;
 }
 
-.diff-btn[data-diff="hard"].active {
-    color: #f59e0b;
-}
-
-.diff-btn[data-diff="extreme"].active {
-    color: #ff0055;
-}
-
 .input-row {
     display: flex;
     gap: 6px;
@@ -228,10 +274,6 @@ body {
     cursor: pointer;
 }
 
-.btn-modifier:active {
-    background: #24384e;
-}
-
 .quick-chips-row {
     display: flex;
     gap: 5px;
@@ -249,11 +291,6 @@ body {
     cursor: pointer;
 }
 
-.chip-btn:active {
-    border-color: #00e7ff;
-    color: #fff;
-}
-
 .main-action-btn {
     width: 100%;
     padding: 12px;
@@ -264,10 +301,6 @@ body {
     cursor: pointer;
     letter-spacing: 0.5px;
     transition: transform 0.1s ease;
-}
-
-.main-action-btn:active {
-    transform: scale(0.98);
 }
 
 .btn-start {
@@ -286,5 +319,4 @@ body {
     background: #162436;
     color: #42566d;
     cursor: not-allowed;
-    box-shadow: none;
 }

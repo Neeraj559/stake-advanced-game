@@ -1,4 +1,5 @@
 const TOTAL_STEPS = 13;
+const MAX_BET_LIMIT = 10000;
 
 const CONFIGS = {
     easy: {
@@ -88,9 +89,9 @@ function playSound(type) {
 // ---------------- THREE.JS 3D SCENE ----------------
 const viewport = document.getElementById('viewport');
 const scene = new THREE.Scene();
-scene.fog = new THREE.FogExp2(0x02060e, 0.018);
+scene.fog = new THREE.FogExp2(0x02060e, 0.022);
 
-const camera = new THREE.PerspectiveCamera(54, viewport.clientWidth / viewport.clientHeight, 0.1, 1000);
+const camera = new THREE.PerspectiveCamera(52, viewport.clientWidth / viewport.clientHeight, 0.1, 1000);
 const INITIAL_CAM_POS = { x: 0, y: 3.5, z: 4.6 };
 camera.position.set(INITIAL_CAM_POS.x, INITIAL_CAM_POS.y, INITIAL_CAM_POS.z);
 camera.lookAt(0, 0.8, -8);
@@ -100,66 +101,10 @@ renderer.setSize(viewport.clientWidth, viewport.clientHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 viewport.appendChild(renderer.domElement);
 
-// Mountain Cliffs with Visible Edge Silhouettes
-function buildMountains() {
-    const rockMat = new THREE.MeshStandardMaterial({ 
-        color: 0x071524, 
-        roughness: 0.85, 
-        metalness: 0.2, 
-        flatShading: true 
-    });
-    const edgeMat = new THREE.LineBasicMaterial({ color: 0x00d2ff, opacity: 0.35, transparent: true });
-
-    // Left Cliffs
-    [-15, -35, -55].forEach((z, i) => {
-        const h = 45 + i * 10;
-        const geom = new THREE.ConeGeometry(9 + i * 2, h, 6);
-        const rock = new THREE.Mesh(geom, rockMat);
-        rock.position.set(-11 - i * 2, h / 2 - 15, z);
-        scene.add(rock);
-
-        const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geom), edgeMat);
-        edges.position.copy(rock.position);
-        scene.add(edges);
-    });
-
-    // Right Cliffs
-    [-18, -38, -58].forEach((z, i) => {
-        const h = 48 + i * 10;
-        const geom = new THREE.ConeGeometry(10 + i * 2, h, 7);
-        const rock = new THREE.Mesh(geom, rockMat);
-        rock.position.set(12 + i * 2, h / 2 - 15, z);
-        scene.add(rock);
-
-        const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geom), edgeMat);
-        edges.position.copy(rock.position);
-        scene.add(edges);
-    });
-}
-buildMountains();
-
-// Lights
-scene.add(new THREE.AmbientLight(0x3a5f8a, 0.7));
-const dirLight = new THREE.DirectionalLight(0x00e7ff, 1.4);
+scene.add(new THREE.AmbientLight(0x406085, 0.9));
+const dirLight = new THREE.DirectionalLight(0x00e7ff, 1.2);
 dirLight.position.set(10, 20, 10);
 scene.add(dirLight);
-
-// Bridge Suspension Side Cables
-function createBridgeStructure() {
-    const railMat = new THREE.MeshStandardMaterial({ color: 0x162c44, metalness: 0.9, roughness: 0.2 });
-    const beamGeom = new THREE.CylinderGeometry(0.05, 0.05, 75, 16);
-
-    const leftRail = new THREE.Mesh(beamGeom, railMat);
-    leftRail.rotation.x = Math.PI / 2;
-    leftRail.position.set(-1.9, -0.15, -28);
-    scene.add(leftRail);
-
-    const rightRail = new THREE.Mesh(beamGeom, railMat);
-    rightRail.rotation.x = Math.PI / 2;
-    rightRail.position.set(1.9, -0.15, -28);
-    scene.add(rightRail);
-}
-createBridgeStructure();
 
 const STEP_DISTANCE = 3.2;
 const bridgeSteps = [];
@@ -170,7 +115,7 @@ function createGlassTile(x, z, width = 1.1) {
     const glassMat = new THREE.MeshPhysicalMaterial({
         color: 0x00d2ff,
         transparent: true,
-        opacity: 0.38,
+        opacity: 0.45,
         roughness: 0.1,
         metalness: 0.15,
         transmission: 0.85,
@@ -252,7 +197,7 @@ function triggerGlassShatter(x, y, z) {
     }
 }
 
-// Raycaster for Direct 3D Touch
+// Raycaster for 3D Screen Touch
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
 
@@ -295,7 +240,7 @@ function animate() {
 }
 animate();
 
-// ---------------- GAMEPLAY LOGIC ----------------
+// ---------------- GAMEPLAY & STAKE POPUP LOGIC ----------------
 const balanceDisplay = document.getElementById('balance-display');
 const betInput = document.getElementById('bet-input');
 const mainBtn = document.getElementById('main-btn');
@@ -306,6 +251,31 @@ const stepHud = document.getElementById('step-hud');
 const decisionButtons = document.getElementById('decision-buttons');
 const diffButtons = document.querySelectorAll('.diff-btn');
 const chipButtons = document.querySelectorAll('.chip-btn');
+
+// Stake Win Card Elements
+const winCard = document.getElementById('stake-win-card');
+const winMultiplier = document.getElementById('win-multiplier');
+const winPayout = document.getElementById('win-payout');
+
+function showStakeWinAnimation(multiplier, amount) {
+    winMultiplier.textContent = `${multiplier.toFixed(2)}×`;
+    winPayout.textContent = `$${amount.toFixed(2)}`;
+
+    gsap.killTweensOf(winCard);
+    gsap.fromTo(winCard, 
+        { scale: 0, opacity: 0 }, 
+        { scale: 1, opacity: 1, duration: 0.35, ease: "back.out(1.7)" }
+    );
+
+    // Auto-hide popup after 2.8 seconds
+    gsap.to(winCard, {
+        scale: 0.8,
+        opacity: 0,
+        delay: 2.8,
+        duration: 0.25,
+        ease: "power2.in"
+    });
+}
 
 function renderDecisionButtons() {
     decisionButtons.innerHTML = '';
@@ -336,13 +306,23 @@ diffButtons.forEach(btn => {
 chipButtons.forEach(chip => {
     chip.addEventListener('click', () => {
         if (gameState === 'PLAYING') return;
-        betInput.value = chip.dataset.amt;
+        const amt = parseFloat(chip.dataset.amt);
+        betInput.value = Math.min(amt, balance, MAX_BET_LIMIT);
     });
 });
 
-btnHalf.addEventListener('click', () => betInput.value = Math.max(1, Math.floor(parseFloat(betInput.value) / 2)));
-btnDouble.addEventListener('click', () => betInput.value = Math.min(balance, Math.floor(parseFloat(betInput.value) * 2)));
-btnMax.addEventListener('click', () => betInput.value = balance);
+btnHalf.addEventListener('click', () => {
+    betInput.value = Math.max(1, Math.floor(parseFloat(betInput.value) / 2));
+});
+
+btnDouble.addEventListener('click', () => {
+    const doubled = parseFloat(betInput.value) * 2;
+    betInput.value = Math.min(doubled, balance, MAX_BET_LIMIT);
+});
+
+btnMax.addEventListener('click', () => {
+    betInput.value = Math.min(balance, MAX_BET_LIMIT);
+});
 
 mainBtn.addEventListener('click', handleMainAction);
 
@@ -359,7 +339,10 @@ function updateHud() {
 function handleMainAction() {
     if (gameState === 'IDLE' || gameState === 'ENDED') {
         betAmount = parseFloat(betInput.value);
-        if (isNaN(betAmount) || betAmount <= 0 || betAmount > balance) return;
+        if (isNaN(betAmount) || betAmount <= 0 || betAmount > balance || betAmount > MAX_BET_LIMIT) return;
+
+        // Hide any previous win card
+        gsap.to(winCard, { opacity: 0, scale: 0, duration: 0.15 });
 
         balance -= betAmount;
         balanceDisplay.textContent = `$${balance.toFixed(2)}`;
@@ -420,7 +403,6 @@ function makeStep(chosenIndex) {
 
     playSound('jump');
 
-    // Smooth forward arc jump
     gsap.timeline()
         .to(humanGroup.position, {
             x: targetX,
@@ -444,7 +426,7 @@ function makeStep(chosenIndex) {
                 chosenGroup.pane.material.color.setHex(0x00ff88);
                 chosenGroup.frame.material.color.setHex(0x00ff88);
 
-                // Shatter ONLY this step's trap panels
+                // Shatter current step's trap panels
                 setTimeout(() => {
                     bridgeSteps[stepIndexNow].panels.forEach((p, idx) => {
                         if (!safePanelsMatrix[stepIndexNow].includes(idx)) {
@@ -470,7 +452,6 @@ function makeStep(chosenIndex) {
                     mainBtn.className = 'main-action-btn btn-cashout';
                 }
             } else {
-                // Shatter selected trap panel & drop
                 playSound('shatter');
                 const brokenGroup = bridgeSteps[stepIndexNow].panels[chosenIndex];
                 triggerGlassShatter(targetX, 0, targetZ);
@@ -491,6 +472,10 @@ function cashOut() {
 
     playSound('cashout');
     confetti({ particleCount: 100, spread: 80, origin: { y: 0.6 } });
+    
+    // Trigger Stake Win Box Animation
+    showStakeWinAnimation(finalMult, winAmount);
+    
     endGame(true);
 }
 
