@@ -490,8 +490,8 @@ function initTouchSwipe() {
         if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 30) {
             const conf = CONFIGS[currentDiff];
             if (conf.panels === 2) {
-                if (diffX < 0) makeStep(0); // Swipe Left
-                else makeStep(1); // Swipe Right
+                if (diffX < 0) makeStep(0);
+                else makeStep(1);
             }
         }
     }, { passive: true });
@@ -596,7 +596,6 @@ function makeStep(chosenIndex) {
     const targetPanel = panels3D[currentStep][chosenIndex];
     const isSafe = (chosenIndex === bridgePattern[currentStep]);
 
-    // Jump Tween
     gsap.to(characterMesh.position, {
         x: targetPanel.position.x,
         z: targetPanel.position.z,
@@ -611,7 +610,6 @@ function makeStep(chosenIndex) {
         ease: "power1.inOut"
     });
 
-    // Cinematic dynamic camera tracking
     gsap.to(camera.position, {
         x: targetPanel.position.x * 0.45,
         y: 4.2,
@@ -664,7 +662,6 @@ function makeStep(chosenIndex) {
             triggerGlassShatter(targetPanel.position, 1.4, 1.8);
             targetPanel.visible = false;
 
-            // Dramatic fall cam zoom
             gsap.to(camera.position, { y: 2.2, duration: 0.6, ease: "power1.in" });
             gsap.to(characterMesh.position, { y: -10, duration: 0.7, ease: "power2.in" });
             setTimeout(() => {
@@ -845,6 +842,50 @@ function applyTheme(theme) {
     build3DBridge();
     updateHud();
 }
+
+// ---------------- SMART KEYBOARD SHORTCUTS ----------------
+window.addEventListener('keydown', (e) => {
+    // Agar user kisi input field mein type kar raha ho toh trigger mat karo
+    if (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+
+    const key = e.key.toLowerCase();
+    
+    // Spacebar -> Start Game / Cashout / Stop Auto-Bet
+    if (e.code === 'Space') {
+        e.preventDefault();
+        handleMainAction();
+        return;
+    }
+
+    // Panels Navigation (Arrow Keys & Number Keys 1-4)
+    if (gameState === 'PLAYING' && playMode === 'manual') {
+        const conf = CONFIGS[currentDiff];
+        if (e.key === 'ArrowLeft' || e.key === '1') {
+            if (conf.panels >= 1) makeStep(0);
+        } else if (e.key === 'ArrowRight' || e.key === '2') {
+            if (conf.panels === 2) makeStep(1);
+            else if (conf.panels > 2) makeStep(1);
+        } else if (e.key === '3' && conf.panels >= 3) {
+            makeStep(2);
+        } else if (e.key === '4' && conf.panels >= 4) {
+            makeStep(3);
+        }
+    }
+
+    // Quick Bet Modifiers (Q = 1/2, W = 2x, E = MAX)
+    if (gameState === 'IDLE' || gameState === 'ENDED') {
+        if (key === 'q') {
+            betInput.value = Math.max(1, Math.floor(parseFloat(betInput.value) / 2));
+            currentBet = parseFloat(betInput.value);
+        } else if (key === 'w') {
+            betInput.value = Math.min(parseFloat(betInput.value) * 2, balance, MAX_BET_LIMIT);
+            currentBet = parseFloat(betInput.value);
+        } else if (key === 'e') {
+            betInput.value = Math.min(balance, MAX_BET_LIMIT);
+            currentBet = parseFloat(betInput.value);
+        }
+    }
+});
 
 // ---------------- EVENT LISTENERS ----------------
 mainBtn.addEventListener('click', handleMainAction);
