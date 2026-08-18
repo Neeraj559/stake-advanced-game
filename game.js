@@ -1,10 +1,16 @@
-const COLS = 6;
-const ROWS = 5;
-const CELL_SIZE = 58;
+const TOTAL_STEPS = 8;
+const MULTIPLIERS = [1.96, 3.84, 7.52, 14.75, 28.90, 56.65, 111.00, 218.00];
 
-// Pure Web Audio Studio FX
+let balance = 1000;
+let betAmount = 10;
+let currentStep = 0;
+let safeSides = []; // 0 = Left, 1 = Right
+let gameState = 'IDLE'; // IDLE, PLAYING, JUMPING, ENDED
+
+// Web Audio Synth
 const AudioCtx = window.AudioContext || window.webkitAudioContext;
 let audio = null;
+
 function playSound(type) {
     if (!audio) audio = new AudioCtx();
     if (audio.state === 'suspended') audio.resume();
@@ -14,410 +20,239 @@ function playSound(type) {
     osc.connect(gain);
     gain.connect(audio.destination);
 
-    if (type === 'drop') {
-        osc.frequency.setValueAtTime(140, now);
-        osc.frequency.exponentialRampToValueAtTime(40, now + 0.08);
-        gain.gain.setValueAtTime(0.2, now);
-        gain.gain.linearRampToValueAtTime(0.01, now + 0.08);
+    if (type === 'jump') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(280, now);
+        osc.frequency.exponentialRampToValueAtTime(560, now + 0.15);
+        gain.gain.setValueAtTime(0.3, now);
+        gain.gain.linearRampToValueAtTime(0.01, now + 0.15);
         osc.start(now);
-        osc.stop(now + 0.08);
-    } else if (type === 'match') {
+        osc.stop(now + 0.15);
+    } else if (type === 'land') {
         osc.type = 'triangle';
         osc.frequency.setValueAtTime(450, now);
-        osc.frequency.exponentialRampToValueAtTime(800, now + 0.14);
-        gain.gain.setValueAtTime(0.35, now);
-        gain.gain.linearRampToValueAtTime(0.01, now + 0.14);
+        gain.gain.setValueAtTime(0.3, now);
+        gain.gain.linearRampToValueAtTime(0.01, now + 0.1);
         osc.start(now);
-        osc.stop(now + 0.14);
-    } else if (type === 'lightning') {
+        osc.stop(now + 0.1);
+    } else if (type === 'shatter') {
         osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(280, now);
-        osc.frequency.linearRampToValueAtTime(1200, now + 0.4);
+        osc.frequency.setValueAtTime(160, now);
+        osc.frequency.exponentialRampToValueAtTime(30, now + 0.5);
         gain.gain.setValueAtTime(0.4, now);
-        gain.gain.linearRampToValueAtTime(0.01, now + 0.45);
+        gain.gain.linearRampToValueAtTime(0.01, now + 0.5);
         osc.start(now);
-        osc.stop(now + 0.45);
+        osc.stop(now + 0.5);
     }
 }
 
-const app = new PIXI.Application({
-    width: COLS * CELL_SIZE,
-    height: ROWS * CELL_SIZE,
-    backgroundAlpha: 0,
-    antialias: true
-});
-document.getElementById('canvas-holder').appendChild(app.view);
+// ---------------- THREE.JS 3D SCENE SETUP ----------------
+const viewport = document.getElementById('viewport');
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x05090e, 0.04);
 
-const THEMES = [
-    { id: 'gem_green',  shape: 'diamond',  color: 0x00ff88, glow: 0x44ffaa, highlight: 0xb3ffd6, pay: 0.35 },
-    { id: 'gem_blue',   shape: 'hexagon',  color: 0x00bfff, glow: 0x55d4ff, highlight: 0xb3ddff, pay: 0.50 },
-    { id: 'gem_purple', shape: 'triangle', color: 0xbd00ff, glow: 0xdf55ff, highlight: 0xeebbff, pay: 0.70 },
-    { id: 'gem_red',    shape: 'square',   color: 0xff0044, glow: 0xff5588, highlight: 0xffa3be, pay: 0.90 },
-    { id: 'goblet',     shape: 'circle',   color: 0xffbb00, glow: 0xffdd33, highlight: 0xfff2b3, pay: 1.50 },
-    { id: 'ring',       shape: 'reactor',  color: 0xff00bb, glow: 0xff66dd, highlight: 0xffcceeff, pay: 2.50 },
-    { id: 'crown',      shape: 'mask',     color: 0xffd700, glow: 0xffee66, highlight: 0xffffff, pay: 4.50 },
-    { id: 'zeus',       shape: 'zeus',     color: 0xffffff, glow: 0x00ffff, highlight: 0xffffff, pay: 8.00, isScatter: true },
-    { id: 'mult_orb',   shape: 'orb',      color: 0xff3300, glow: 0xffff00, highlight: 0xffffff, isMult: true }
-];
+const camera = new THREE.PerspectiveCamera(45, viewport.clientWidth / viewport.clientHeight, 0.1, 1000);
+camera.position.set(0, 6, 8);
+camera.lookAt(0, 0, -4);
 
-let grid = [];
-let balance = 1000;
-let bet = 1.00;
-let isSpinning = false;
-let totalMultiplier = 1;
-let currentTumbleWin = 0;
-let freeSpinsLeft = 0;
-let isBonusMode = false;
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setSize(viewport.clientWidth, viewport.clientHeight);
+renderer.setPixelRatio(window.devicePixelRatio);
+viewport.appendChild(renderer.domElement);
 
-const spinBtn = document.getElementById('spin-btn');
-const creditVal = document.getElementById('credit-val');
-const betVal = document.getElementById('bet-val');
-const winVal = document.getElementById('win-val');
-const multVal = document.getElementById('mult-val');
-const tumbleBar = document.getElementById('tumble-bar');
-const tumbleAmount = document.getElementById('tumble-amount');
-const zeusSprite = document.getElementById('zeus-sprite');
-const stageCard = document.getElementById('stage-card');
-const spinsPill = document.getElementById('spins-pill');
-const spinsLeftText = document.getElementById('spins-left');
-const buyFeatureBtn = document.getElementById('buy-feature-btn');
+// Lighting
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+scene.add(ambientLight);
 
-const mainContainer = new PIXI.Container();
-app.stage.addChild(mainContainer);
+const dirLight = new THREE.DirectionalLight(0x00d2ff, 1.2);
+dirLight.position.set(5, 12, 10);
+scene.add(dirLight);
 
-function getWeightedMultiplier() {
-    const roll = Math.random() * 100;
-    if (roll < 55) return 2;
-    if (roll < 80) return 3;
-    if (roll < 92) return 5;
-    if (roll < 97) return 10;
-    if (roll < 99.4) return 25;
-    return 50;
-}
-
-function drawGemGraphic(data, multVal = null) {
-    const cont = new PIXI.Container();
-    const half = CELL_SIZE / 2;
-    const r = CELL_SIZE / 2 - 7;
-
-    const shadow = new PIXI.Graphics();
-    shadow.beginFill(0x000000, 0.65);
-    shadow.drawRoundedRect(3, 5, CELL_SIZE - 6, CELL_SIZE - 6, 12);
-    shadow.endFill();
-    cont.addChild(shadow);
-
-    const gem = new PIXI.Graphics();
-    gem.lineStyle(2.5, data.glow, 0.95);
-    gem.beginFill(data.color, 0.9);
-
-    if (data.shape === 'diamond') {
-        gem.drawPolygon([half, 5, CELL_SIZE - 7, half, half, CELL_SIZE - 7, 7, half]);
-    } else if (data.shape === 'hexagon') {
-        gem.drawPolygon([half - 14, 7, half + 14, 7, CELL_SIZE - 7, half, half + 14, CELL_SIZE - 7, half - 14, CELL_SIZE - 7, 7, half]);
-    } else if (data.shape === 'triangle') {
-        gem.drawPolygon([half, 6, CELL_SIZE - 6, CELL_SIZE - 7, 6, CELL_SIZE - 7]);
-    } else if (data.shape === 'square') {
-        gem.drawRoundedRect(7, 7, CELL_SIZE - 14, CELL_SIZE - 14, 8);
-    } else if (data.shape === 'circle') {
-        gem.drawCircle(half, half, r);
-    } else if (data.shape === 'reactor') {
-        gem.lineStyle(3, 0xff00bb, 1);
-        gem.drawCircle(half, half, r);
-        gem.beginFill(0x440033, 0.9);
-        gem.drawCircle(half, half, r - 5);
-    } else if (data.shape === 'mask') {
-        gem.lineStyle(2.5, 0xffd700, 1);
-        gem.drawRoundedRect(6, 6, CELL_SIZE - 12, CELL_SIZE - 12, 10);
-    } else if (data.shape === 'zeus') {
-        gem.lineStyle(2.5, 0x00ffff, 1);
-        gem.drawRoundedRect(6, 6, CELL_SIZE - 12, CELL_SIZE - 12, 10);
-    } else if (data.shape === 'orb') {
-        gem.lineStyle(3.5, 0xffff00, 1);
-        gem.drawCircle(half, half, r);
-    }
-    gem.endFill();
-    cont.addChild(gem);
-    cont.gemShape = gem;
-
-    const facet = new PIXI.Graphics();
-    facet.beginFill(data.highlight, 0.45);
-    facet.drawPolygon([half - 8, 9, half + 8, 9, half + 4, half - 2, half - 4, half - 2]);
-    facet.endFill();
-    cont.addChild(facet);
-
-    if (data.isScatter) {
-        const scatterTxt = new PIXI.Text('⚡', { fontSize: 24 });
-        scatterTxt.anchor.set(0.5);
-        scatterTxt.x = half;
-        scatterTxt.y = half;
-        cont.addChild(scatterTxt);
-    } else if (data.isMult) {
-        const multTxt = new PIXI.Text(`${multVal}x`, {
-            fontFamily: 'Impact',
-            fontSize: 15,
-            fill: 0xffff00,
-            stroke: 0x000000,
-            strokeThickness: 3
-        });
-        multTxt.anchor.set(0.5);
-        multTxt.x = half;
-        multTxt.y = half;
-        cont.addChild(multTxt);
-    }
-
-    return cont;
-}
-
-function createTile(type, c, r) {
-    let multVal = null;
-    if (type.isMult) multVal = getWeightedMultiplier();
-
-    const graphic = drawGemGraphic(type, multVal);
-    graphic.c = c;
-    graphic.r = r;
-    graphic.typeData = type;
-    graphic.multValue = multVal;
-    graphic.x = c * CELL_SIZE;
-    graphic.y = r * CELL_SIZE;
-    return graphic;
-}
-
-function getRandomType(forceScatter = false) {
-    if (forceScatter) return THEMES.find(t => t.id === 'zeus');
-    const r = Math.random();
-    if (r < 0.035) return THEMES.find(t => t.id === 'mult_orb');
-    if (r < 0.065) return THEMES.find(t => t.id === 'zeus');
-    const standard = THEMES.filter(t => !t.isScatter && !t.isMult);
-    return standard[Math.floor(Math.random() * standard.length)];
-}
-
-// Initial Grid Board
-for (let c = 0; c < COLS; c++) {
-    grid[c] = [];
-    for (let r = 0; r < ROWS; r++) {
-        const tile = createTile(getRandomType(), c, r);
-        grid[c][r] = tile;
-        mainContainer.addChild(tile);
-    }
-}
-
-spinBtn.addEventListener('click', () => runSpin(false));
-buyFeatureBtn.addEventListener('click', () => {
-    if (isSpinning || balance < bet * 100) return;
-    balance -= (bet * 100);
-    creditVal.textContent = `$${balance.toFixed(2)}`;
-    runSpin(true);
+// Glass Materials
+const glassMaterial = new THREE.MeshPhysicalMaterial({
+    color: 0x00d2ff,
+    transparent: true,
+    opacity: 0.45,
+    roughness: 0.1,
+    metalness: 0.1,
+    transmission: 0.6,
+    ior: 1.5
 });
 
-async function runSpin(guaranteedBonus = false) {
-    if (isSpinning || (balance < bet && freeSpinsLeft === 0)) return;
-    isSpinning = true;
-    spinBtn.disabled = true;
-    buyFeatureBtn.disabled = true;
+const bridgeSteps = [];
+const STEP_DISTANCE = 2.8;
 
-    if (freeSpinsLeft > 0) {
-        freeSpinsLeft--;
-        spinsLeftText.textContent = freeSpinsLeft;
-    } else {
-        if (!guaranteedBonus) {
-            balance -= bet;
-            creditVal.textContent = `$${balance.toFixed(2)}`;
-        }
-        totalMultiplier = 1;
-        multVal.textContent = '1x';
+// Build Bridge Structure
+function build3DBridge() {
+    bridgeSteps.forEach(step => {
+        scene.remove(step.left);
+        scene.remove(step.right);
+    });
+    bridgeSteps.length = 0;
+
+    for (let i = 0; i < TOTAL_STEPS; i++) {
+        const z = -i * STEP_DISTANCE - 2;
+        const geom = new THREE.BoxGeometry(1.2, 0.08, 1.6);
+
+        const leftPane = new THREE.Mesh(geom, glassMaterial.clone());
+        leftPane.position.set(-1.0, 0, z);
+        scene.add(leftPane);
+
+        const rightPane = new THREE.Mesh(geom, glassMaterial.clone());
+        rightPane.position.set(1.0, 0, z);
+        scene.add(rightPane);
+
+        bridgeSteps.push({ left: leftPane, right: rightPane, z });
     }
+}
+build3DBridge();
 
-    currentTumbleWin = 0;
-    winVal.textContent = '$0.00';
-    tumbleBar.classList.remove('active');
+// Player Token (Glowing Neon Sphere)
+const playerGeom = new THREE.SphereGeometry(0.32, 32, 32);
+const playerMat = new THREE.MeshBasicMaterial({ color: 0x00ff88 });
+const player = new THREE.Mesh(playerGeom, playerMat);
+player.position.set(0, 0.35, 0.5);
+scene.add(player);
 
-    // Column Stagger Drop
-    mainContainer.removeChildren();
-    let scatterCount = 0;
+// Render Loop
+function animate() {
+    requestAnimationFrame(animate);
+    renderer.render(scene, camera);
+}
+animate();
 
-    for (let c = 0; c < COLS; c++) {
-        grid[c] = [];
-        for (let r = 0; r < ROWS; r++) {
-            let force = false;
-            if (guaranteedBonus && scatterCount < 4 && Math.random() < 0.25) {
-                force = true;
-                scatterCount++;
-            }
-            const tile = createTile(getRandomType(force), c, r);
-            tile.y = (r - ROWS) * CELL_SIZE - 40;
-            grid[c][r] = tile;
-            mainContainer.addChild(tile);
+// ---------------- GAME LOGIC ----------------
+const balanceDisplay = document.getElementById('balance-display');
+const betInput = document.getElementById('bet-input');
+const mainBtn = document.getElementById('main-btn');
+const btnLeft = document.getElementById('btn-left');
+const btnRight = document.getElementById('btn-right');
+const btnHalf = document.getElementById('btn-half');
+const btnDouble = document.getElementById('btn-double');
 
-            tween(tile, { y: r * CELL_SIZE }, 240 + c * 60, () => {
-                if (r === ROWS - 1) playSound('drop');
-            });
-        }
+btnHalf.addEventListener('click', () => {
+    betInput.value = Math.max(1, Math.floor(parseFloat(betInput.value) / 2));
+});
+btnDouble.addEventListener('click', () => {
+    betInput.value = Math.min(balance, Math.floor(parseFloat(betInput.value) * 2));
+});
+
+mainBtn.addEventListener('click', handleMainAction);
+btnLeft.addEventListener('click', () => makeStep(0));
+btnRight.addEventListener('click', () => makeStep(1));
+
+function handleMainAction() {
+    if (gameState === 'IDLE' || gameState === 'ENDED') {
+        betAmount = parseFloat(betInput.value);
+        if (isNaN(betAmount) || betAmount <= 0 || betAmount > balance) return;
+
+        balance -= betAmount;
+        balanceDisplay.textContent = `$${balance.toFixed(2)}`;
+        startNewGame();
+    } else if (gameState === 'PLAYING' && currentStep > 0) {
+        cashOut();
     }
-    await delay(300 + COLS * 60);
-
-    // Cascading Loop
-    let hasHits = true;
-    while (hasHits) {
-        hasHits = await evaluateTumble();
-    }
-
-    // Apply Total Multiplier to Tumble Win
-    if (currentTumbleWin > 0) {
-        const total = currentTumbleWin * totalMultiplier;
-        balance += total;
-        creditVal.textContent = `$${balance.toFixed(2)}`;
-        winVal.textContent = `+$${total.toFixed(2)}`;
-
-        if (totalMultiplier > 1 || total >= bet * 5) {
-            confetti({ particleCount: 75, spread: 65, origin: { y: 0.6 } });
-        }
-    }
-
-    // Check Free Spins Transition
-    if (freeSpinsLeft > 0) {
-        await delay(600);
-        isSpinning = false;
-        runSpin(false); // Auto next free spin
-        return;
-    } else if (isBonusMode && freeSpinsLeft === 0) {
-        isBonusMode = false;
-        stageCard.classList.remove('bonus-mode');
-        spinsPill.style.display = 'none';
-    }
-
-    isSpinning = false;
-    spinBtn.disabled = false;
-    buyFeatureBtn.disabled = false;
 }
 
-async function evaluateTumble() {
-    const counts = {};
-    const multipliersFound = [];
+function startNewGame() {
+    gameState = 'PLAYING';
+    currentStep = 0;
+    betInput.disabled = true;
 
-    for (let c = 0; c < COLS; c++) {
-        for (let r = 0; r < ROWS; r++) {
-            const t = grid[c][r];
-            if (!t) continue;
-            if (t.typeData.isMult) multipliersFound.push(t);
-            else counts[t.typeData.id] = (counts[t.typeData.id] || 0) + 1;
-        }
+    safeSides = [];
+    for (let i = 0; i < TOTAL_STEPS; i++) {
+        safeSides.push(Math.random() < 0.5 ? 0 : 1);
     }
 
-    const matchedIds = [];
-    for (let id in counts) {
-        if (id === 'zeus' && counts[id] >= 4) {
-            matchedIds.push(id);
-            if (!isBonusMode) triggerBonusMode();
-        } else if (counts[id] >= 8) {
-            matchedIds.push(id);
-        }
-    }
+    build3DBridge();
 
-    if (matchedIds.length === 0) return false;
+    // Reset Player Position & Camera
+    gsap.to(player.position, { x: 0, y: 0.35, z: 0.5, duration: 0.4 });
+    gsap.to(camera.position, { x: 0, y: 6, z: 8, duration: 0.4 });
 
-    // Zeus Multiplier Strike & Fly-To-Meter
-    if (multipliersFound.length > 0) {
-        playSound('lightning');
-        zeusSprite.style.transform = 'scale(1.3) rotate(-12deg)';
-        setTimeout(() => zeusSprite.style.transform = '', 350);
+    btnLeft.disabled = false;
+    btnRight.disabled = false;
+    mainBtn.textContent = 'CHOOSE A PANEL';
+    mainBtn.className = 'main-action-btn btn-disabled';
+}
 
-        for (let m of multipliersFound) {
-            totalMultiplier += m.multValue;
-        }
-        multVal.textContent = `${totalMultiplier}x`;
-        multVal.parentElement.style.transform = 'scale(1.25)';
-        setTimeout(() => multVal.parentElement.style.transform = 'scale(1)', 300);
-    }
+function makeStep(sideChosen) {
+    if (gameState !== 'PLAYING') return;
+    gameState = 'JUMPING';
+    btnLeft.disabled = true;
+    btnRight.disabled = true;
 
-    playSound('match');
+    const targetX = sideChosen === 0 ? -1.0 : 1.0;
+    const targetZ = bridgeSteps[currentStep].z;
+    const isSafe = safeSides[currentStep] === sideChosen;
 
-    // Pragmatic Exact Step Payout ($1 bet base)
-    let step = 0;
-    for (let id of matchedIds) {
-        const theme = THEMES.find(t => t.id === id);
-        let scale = counts[id] >= 12 ? 2.5 : counts[id] >= 10 ? 1.5 : 1.0;
-        step += (theme.pay * scale * bet);
-    }
-    currentTumbleWin += step;
-    tumbleAmount.textContent = `$${(currentTumbleWin * totalMultiplier).toFixed(2)}`;
-    tumbleBar.classList.add('active');
-    winVal.textContent = `+$${(currentTumbleWin * totalMultiplier).toFixed(2)}`;
+    playSound('jump');
 
-    // Gem Burst
-    for (let c = 0; c < COLS; c++) {
-        for (let r = 0; r < ROWS; r++) {
-            const t = grid[c][r];
-            if (t && (matchedIds.includes(t.typeData.id) || t.typeData.isMult)) {
-                t.gemShape.lineStyle(3, 0xffffff, 1);
-                tween(t.scale, { x: 0, y: 0 }, 150);
-            }
-        }
-    }
-    await delay(170);
+    // Smooth Jump Arc using GSAP
+    gsap.timeline()
+        .to(player.position, {
+            x: targetX,
+            z: targetZ,
+            duration: 0.45,
+            ease: "power1.inOut"
+        })
+        .to(player.position, {
+            y: 1.8,
+            duration: 0.22,
+            yoyo: true,
+            repeat: 1,
+            ease: "power2.out"
+        }, 0)
+        .call(() => {
+            // Camera follow forward
+            gsap.to(camera.position, { z: targetZ + 7.5, duration: 0.5 });
+            gsap.to(camera.lookAt, { z: targetZ - 4, duration: 0.5 });
 
-    // Remove Destroyed
-    for (let c = 0; c < COLS; c++) {
-        for (let r = 0; r < ROWS; r++) {
-            const t = grid[c][r];
-            if (t && (matchedIds.includes(t.typeData.id) || t.typeData.isMult)) {
-                mainContainer.removeChild(t);
-                grid[c][r] = null;
-            }
-        }
-    }
+            if (isSafe) {
+                playSound('land');
+                const pane = sideChosen === 0 ? bridgeSteps[currentStep].left : bridgeSteps[currentStep].right;
+                pane.material.color.setHex(0x00ff88);
 
-    // Collapse Downwards
-    for (let c = 0; c < COLS; c++) {
-        let bottom = ROWS - 1;
-        for (let r = ROWS - 1; r >= 0; r--) {
-            if (grid[c][r] !== null) {
-                if (bottom !== r) {
-                    grid[c][bottom] = grid[c][r];
-                    grid[c][r] = null;
-                    tween(grid[c][bottom], { y: bottom * CELL_SIZE }, 190);
+                currentStep++;
+                const mult = MULTIPLIERS[currentStep - 1];
+                const winAmount = betAmount * mult;
+
+                if (currentStep === TOTAL_STEPS) {
+                    cashOut();
+                } else {
+                    gameState = 'PLAYING';
+                    btnLeft.disabled = false;
+                    btnRight.disabled = false;
+                    mainBtn.textContent = `CASHOUT $${winAmount.toFixed(2)} (${mult}x)`;
+                    mainBtn.className = 'main-action-btn btn-cashout';
                 }
-                bottom--;
+            } else {
+                // Shatter pane and drop player
+                playSound('shatter');
+                const brokenPane = sideChosen === 0 ? bridgeSteps[currentStep].left : bridgeSteps[currentStep].right;
+                gsap.to(brokenPane.position, { y: -15, duration: 1.2, ease: "power2.in" });
+                gsap.to(player.position, { y: -15, duration: 1.2, ease: "power2.in" });
+                endGame(false);
             }
-        }
-
-        // Spawn New Drop Tiles
-        for (let r = bottom; r >= 0; r--) {
-            const newTile = createTile(getRandomType(), c, r);
-            newTile.y = (r - (bottom + 1)) * CELL_SIZE;
-            grid[c][r] = newTile;
-            mainContainer.addChild(newTile);
-            tween(newTile, { y: r * CELL_SIZE }, 230);
-        }
-    }
-
-    await delay(260);
-    return true;
+        });
 }
 
-function triggerBonusMode() {
-    isBonusMode = true;
-    freeSpinsLeft = 15;
-    stageCard.classList.add('bonus-mode');
-    spinsPill.style.display = 'block';
-    spinsLeftText.textContent = freeSpinsLeft;
-    confetti({ particleCount: 120, spread: 90, origin: { y: 0.5 } });
+function cashOut() {
+    const finalMult = MULTIPLIERS[currentStep - 1];
+    const winAmount = betAmount * finalMult;
+    balance += winAmount;
+    balanceDisplay.textContent = `$${balance.toFixed(2)}`;
+
+    confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } });
+    endGame(true);
 }
 
-function tween(target, props, dur, cb) {
-    const start = {};
-    for (let k in props) start[k] = target[k];
-    const t0 = Date.now();
-    const int = setInterval(() => {
-        const p = Math.min(1, (Date.now() - t0) / dur);
-        const ease = 1 - Math.pow(1 - p, 3);
-        for (let k in props) target[k] = start[k] + (props[k] - start[k]) * ease;
-        if (p >= 1) {
-            clearInterval(int);
-            if (cb) cb();
-        }
-    }, 16);
-}
+function endGame(won) {
+    gameState = 'ENDED';
+    betInput.disabled = false;
+    btnLeft.disabled = true;
+    btnRight.disabled = true;
 
-function delay(ms) {
-    return new Promise(res => setTimeout(res, ms));
+    mainBtn.textContent = won ? 'SURVIVED! PLAY AGAIN' : 'FELL DOWN! TRY AGAIN';
+    mainBtn.className = 'main-action-btn btn-start';
 }

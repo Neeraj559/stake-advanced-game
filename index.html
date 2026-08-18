@@ -3,61 +3,41 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-select=no">
-    <title>Gates of Olympus 1000 - Pro Engine</title>
+    <title>3D Glass Bridge - Stake Engine</title>
     <link rel="stylesheet" href="style.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/7.2.4/pixi.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
 </head>
 <body>
 
-    <div class="olympus-stage" id="stage-card">
-        <div class="header-banner">
-            <div class="title-logo">GATES OF OLYMPUS <span class="badge-1000">1000</span></div>
-            <div class="subtitle">WIN UP TO 15,000x BET</div>
-        </div>
-
-        <div class="arena">
-            <div class="left-panel">
-                <div class="hud-pill" id="mult-pill">
-                    <span class="lbl">TOTAL MULTIPLIER</span>
-                    <span class="val" id="mult-val">1x</span>
-                </div>
-                <div class="hud-pill" id="spins-pill" style="display: none; border-color: #00ff88;">
-                    <span class="lbl" style="color: #00ff88;">FREE SPINS LEFT</span>
-                    <span class="val" id="spins-left">15</span>
-                </div>
-                <button class="btn-buy-feature" id="buy-feature-btn">BUY BONUS ($100)</button>
-            </div>
-
-            <div class="zeus-anchor" id="zeus-sprite">⚡</div>
-
-            <div id="canvas-holder"></div>
-
-            <div class="tumble-counter-bar" id="tumble-bar">
-                TUMBLE WIN <span id="tumble-amount">$0.00</span>
+    <div class="stage-wrapper">
+        <div class="top-bar">
+            <div class="brand-title">GLASS BRIDGE 3D</div>
+            <div class="wallet-box">
+                <span class="lbl">BALANCE</span>
+                <span class="val" id="balance-display">$1,000.00</span>
             </div>
         </div>
 
-        <div class="control-footer">
-            <div class="stat-stack">
-                <div class="stat-group">
-                    <span class="tag">CREDIT</span>
-                    <span class="num" id="credit-val">$1,000.00</span>
+        <div class="viewport-3d" id="viewport">
+            <div class="decision-overlay">
+                <button class="choice-btn" id="btn-left" disabled>LEFT ◀</button>
+                <button class="choice-btn" id="btn-right" disabled>RIGHT ▶</button>
+            </div>
+        </div>
+
+        <div class="control-dashboard">
+            <span class="lbl">BET AMOUNT ($)</span>
+            <div class="input-row">
+                <div class="input-shell">
+                    <input type="number" id="bet-input" value="10" min="1" step="1">
                 </div>
-                <div class="stat-group">
-                    <span class="tag">BET</span>
-                    <span class="num" id="bet-val">$1.00</span>
-                </div>
+                <button class="btn-modifier" id="btn-half">½</button>
+                <button class="btn-modifier" id="btn-double">2×</button>
             </div>
 
-            <div class="win-center">
-                <span class="tag">WIN</span>
-                <span class="win-num" id="win-val">$0.00</span>
-            </div>
-
-            <button id="spin-btn" class="spin-btn">
-                <span class="spin-arrows">↻</span>
-            </button>
+            <button class="main-action-btn btn-start" id="main-btn">START CROSSING</button>
         </div>
     </div>
 
