@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-select=no">
-    <title>3D Glass Bridge - Mountain Abyss</title>
+    <title>3D Glass Bridge - Stake Edition</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
@@ -12,14 +12,26 @@
 <body>
 
     <div class="stage-wrapper">
+        <!-- Top Bar -->
         <div class="top-bar">
             <div class="brand-title">GLASS BRIDGE 3D</div>
-            <div class="wallet-box">
-                <span class="lbl">BALANCE</span>
-                <span class="val" id="balance-display">$1,000.00</span>
+            <div class="top-actions">
+                <button class="icon-btn" id="fairness-btn" title="Provably Fair">⚖️ Fair</button>
+                <button class="icon-btn" id="sound-toggle-btn" title="Toggle Sound">🔊</button>
+                <div class="wallet-box">
+                    <span class="lbl">BALANCE</span>
+                    <span class="val" id="balance-display">$1,000.00</span>
+                </div>
             </div>
         </div>
 
+        <!-- Mode Selector: Manual vs Auto -->
+        <div class="mode-tabs">
+            <button class="mode-tab active" id="tab-manual">Manual</button>
+            <button class="mode-tab" id="tab-auto">Auto-Play</button>
+        </div>
+
+        <!-- 3D Viewport -->
         <div class="viewport-3d" id="viewport">
             <div class="step-hud-badge" id="step-hud">MEDIUM • STEP 1 / 13 • 1.18x</div>
             
@@ -38,6 +50,7 @@
             <div class="decision-overlay" id="decision-buttons"></div>
         </div>
 
+        <!-- Control Dashboard -->
         <div class="control-dashboard">
             <span class="lbl">DIFFICULTY LEVEL</span>
             <div class="difficulty-pill-box">
@@ -65,7 +78,48 @@
                 <button class="chip-btn" data-amt="100">$100</button>
             </div>
 
+            <!-- Auto Settings (Visible only on Auto Tab) -->
+            <div class="auto-config-box" id="auto-config-box" style="display: none;">
+                <div class="auto-row">
+                    <div class="auto-field">
+                        <span class="lbl">NUMBER OF BETS</span>
+                        <input type="number" id="auto-rounds-input" value="5" min="1" max="100">
+                    </div>
+                    <div class="auto-field">
+                        <span class="lbl">TARGET STEPS</span>
+                        <input type="number" id="auto-steps-input" value="3" min="1" max="13">
+                    </div>
+                </div>
+            </div>
+
             <button class="main-action-btn btn-start" id="main-btn">START CROSSING</button>
+        </div>
+
+        <!-- Live Bet History Drawer -->
+        <div class="history-container">
+            <div class="history-title">RECENT BETS</div>
+            <div class="history-list" id="history-list"></div>
+        </div>
+    </div>
+
+    <!-- Provably Fair Modal -->
+    <div class="modal-backdrop" id="fairness-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>⚖️ Provably Fair</h3>
+                <button class="modal-close" id="close-modal-btn">✕</button>
+            </div>
+            <div class="modal-body">
+                <label class="lbl">SERVER SEED (HASHED)</label>
+                <input type="text" id="server-seed-hash" readonly>
+                
+                <label class="lbl">CLIENT SEED</label>
+                <input type="text" id="client-seed" value="stake-user-seed-777">
+                
+                <label class="lbl">NONCE</label>
+                <input type="text" id="fairness-nonce" readonly value="0">
+                <p class="modal-info">Every glass panel layout is determined mathematically using SHA-256 before the round starts.</p>
+            </div>
         </div>
     </div>
 

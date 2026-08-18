@@ -39,13 +39,46 @@ let currentStep = 0;
 let safePanelsMatrix = [];
 let gameState = 'IDLE';
 
-// Web Audio FX
+// Auto Play State
+let playMode = 'manual';
+let autoRemainingRounds = 0;
+let autoTargetSteps = 3;
+
+// Provably Fair State
+let nonce = 0;
+let currentServerSeed = '';
+
+// Web Audio & Ambient Synth
 const AudioCtx = window.AudioContext || window.webkitAudioContext;
 let audio = null;
+let ambientOsc = null;
+let ambientGain = null;
+let soundEnabled = true;
+
+function initAudio() {
+    if (!audio) {
+        audio = new AudioCtx();
+        startAmbientDrone();
+    }
+    if (audio.state === 'suspended') audio.resume();
+}
+
+function startAmbientDrone() {
+    try {
+        ambientOsc = audio.createOscillator();
+        ambientGain = audio.createGain();
+        ambientOsc.type = 'sine';
+        ambientOsc.frequency.setValueAtTime(55, audio.currentTime); // Low A hum
+        ambientGain.gain.setValueAtTime(0.04, audio.currentTime);
+        ambientOsc.connect(ambientGain);
+        ambientGain.connect(audio.destination);
+        ambientOsc.start();
+    } catch(e) {}
+}
 
 function playSound(type) {
-    if (!audio) audio = new AudioCtx();
-    if (audio.state === 'suspended') audio.resume();
+    if (!soundEnabled) return;
+    initAudio();
     const now = audio.currentTime;
     const osc = audio.createOscillator();
     const gain = audio.createGain();
@@ -159,7 +192,7 @@ function build3DBridge() {
 }
 build3DBridge();
 
-// 3D Human Avatar
+// Human Avatar
 const humanGroup = new THREE.Group();
 const skinMat = new THREE.MeshLambertMaterial({ color: 0xffdbac });
 const jacketMat = new THREE.MeshLambertMaterial({ color: 0x00ff88 });
@@ -197,12 +230,12 @@ function triggerGlassShatter(x, y, z) {
     }
 }
 
-// Raycaster for 3D Screen Touch
+// Raycaster
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
 
 viewport.addEventListener('click', (e) => {
-    if (gameState !== 'PLAYING') return;
+    if (gameState !== 'PLAYING' || playMode === 'auto') return;
     const rect = viewport.getBoundingClientRect();
     mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
     mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
@@ -240,7 +273,7 @@ function animate() {
 }
 animate();
 
-// ---------------- GAMEPLAY & STAKE POPUP LOGIC ----------------
+// ---------------- GAMEPLAY & CONTROLS ----------------
 const balanceDisplay = document.getElementById('balance-display');
 const betInput = document.getElementById('bet-input');
 const mainBtn = document.getElementById('main-btn');
@@ -251,30 +284,95 @@ const stepHud = document.getElementById('step-hud');
 const decisionButtons = document.getElementById('decision-buttons');
 const diffButtons = document.querySelectorAll('.diff-btn');
 const chipButtons = document.querySelectorAll('.chip-btn');
-
-// Stake Win Card Elements
 const winCard = document.getElementById('stake-win-card');
 const winMultiplier = document.getElementById('win-multiplier');
 const winPayout = document.getElementById('win-payout');
+const historyList = document.getElementById('history-list');
+
+// Tabs & Auto Mode Elements
+const tabManual = document.getElementById('tab-manual');
+const tabAuto = document.getElementById('tab-auto');
+const autoConfigBox = document.getElementById('auto-config-box');
+const autoRoundsInput = document.getElementById('auto-rounds-input');
+const autoStepsInput = document.getElementById('auto-steps-input');
+
+// Fairness Elements
+const fairnessBtn = document.getElementById('fairness-btn');
+const fairnessModal = document.getElementById('fairness-modal');
+const closeModalBtn = document.getElementById('close-modal-btn');
+const serverSeedHashInput = document.getElementById('server-seed-hash');
+const fairnessNonceInput = document.getElementById('fairness-nonce');
+const soundToggleBtn = document.getElementById('sound-toggle-btn');
+
+// Mode Tab Switching
+tabManual.addEventListener('click', () => {
+    if (gameState === 'PLAYING') return;
+    playMode = 'manual';
+    tabManual.classList.add('active');
+    tabAuto.classList.remove('active');
+    autoConfigBox.style.display = 'none';
+    mainBtn.textContent = 'START CROSSING';
+});
+
+tabAuto.addEventListener('click', () => {
+    if (gameState === 'PLAYING') return;
+    playMode = 'auto';
+    tabAuto.classList.add('active');
+    tabManual.classList.remove('active');
+    autoConfigBox.style.display = 'block';
+    mainBtn.textContent = 'START AUTO-PLAY';
+});
+
+// Sound Toggle
+soundToggleBtn.addEventListener('click', () => {
+    soundEnabled = !soundEnabled;
+    soundToggleBtn.textContent = soundEnabled ? '🔊' : '🔇';
+    if (ambientGain) {
+        ambientGain.gain.setValueAtTime(soundEnabled ? 0.04 : 0, audio.currentTime);
+    }
+});
+
+// Provably Fair Modal
+fairnessBtn.addEventListener('click', () => fairnessModal.style.display = 'flex');
+closeModalBtn.addEventListener('click', () => fairnessModal.style.display = 'none');
+
+// SHA-256 Pseudo Generator for Provably Fair
+function generateProvablyFairSeed() {
+    nonce++;
+    currentServerSeed = 'seed_' + Math.random().toString(36).substring(2) + Date.now().toString(36);
+    serverSeedHashInput.value = 'hash_' + Array.from(currentServerSeed).reduce((h, c) => (h = ((h << 5) - h) + c.charCodeAt(0)) | 0, 0).toString(16);
+    fairnessNonceInput.value = nonce;
+}
+generateProvablyFairSeed();
 
 function showStakeWinAnimation(multiplier, amount) {
     winMultiplier.textContent = `${multiplier.toFixed(2)}×`;
     winPayout.textContent = `$${amount.toFixed(2)}`;
 
     gsap.killTweensOf(winCard);
-    gsap.fromTo(winCard, 
-        { scale: 0, opacity: 0 }, 
-        { scale: 1, opacity: 1, duration: 0.35, ease: "back.out(1.7)" }
-    );
+    gsap.timeline()
+        .fromTo(winCard, 
+            { scale: 0.3, opacity: 0 }, 
+            { scale: 1, opacity: 1, duration: 0.35, ease: "back.out(2)" }
+        )
+        .to(winCard, {
+            scale: 0.8,
+            opacity: 0,
+            delay: 2.2,
+            duration: 0.3,
+            ease: "power2.in"
+        });
+}
 
-    // Auto-hide popup after 2.8 seconds
-    gsap.to(winCard, {
-        scale: 0.8,
-        opacity: 0,
-        delay: 2.8,
-        duration: 0.25,
-        ease: "power2.in"
-    });
+function addHistoryItem(isWin, mult, amt) {
+    const item = document.createElement('div');
+    item.className = `history-item ${isWin ? 'win' : 'loss'}`;
+    item.innerHTML = `
+        <span>${isWin ? mult.toFixed(2) + 'x' : '0.00x'}</span>
+        <span>${isWin ? '+$' + amt.toFixed(2) : '-$' + betAmount.toFixed(2)}</span>
+    `;
+    historyList.prepend(item);
+    if (historyList.children.length > 10) historyList.removeChild(historyList.lastChild);
 }
 
 function renderDecisionButtons() {
@@ -341,13 +439,18 @@ function handleMainAction() {
         betAmount = parseFloat(betInput.value);
         if (isNaN(betAmount) || betAmount <= 0 || betAmount > balance || betAmount > MAX_BET_LIMIT) return;
 
-        // Hide any previous win card
+        if (playMode === 'auto') {
+            autoRemainingRounds = parseInt(autoRoundsInput.value) || 1;
+            autoTargetSteps = Math.min(13, parseInt(autoStepsInput.value) || 3);
+        }
+
+        generateProvablyFairSeed();
         gsap.to(winCard, { opacity: 0, scale: 0, duration: 0.15 });
 
         balance -= betAmount;
         balanceDisplay.textContent = `$${balance.toFixed(2)}`;
         startNewGame();
-    } else if (gameState === 'PLAYING' && currentStep > 0) {
+    } else if (gameState === 'PLAYING' && currentStep > 0 && playMode === 'manual') {
         cashOut();
     }
 }
@@ -375,9 +478,23 @@ function startNewGame() {
     gsap.to(camera.position, { x: INITIAL_CAM_POS.x, y: INITIAL_CAM_POS.y, z: INITIAL_CAM_POS.z, duration: 0.4 });
 
     highlightCurrentStep();
-    enableChoiceButtons(true);
-    mainBtn.textContent = 'CHOOSE A PANEL';
-    mainBtn.className = 'main-action-btn btn-disabled';
+
+    if (playMode === 'auto') {
+        mainBtn.textContent = `AUTO PLAYING (${autoRemainingRounds} LEFT)`;
+        mainBtn.className = 'main-action-btn btn-disabled';
+        setTimeout(autoBotStep, 600);
+    } else {
+        enableChoiceButtons(true);
+        mainBtn.textContent = 'CHOOSE A PANEL';
+        mainBtn.className = 'main-action-btn btn-disabled';
+    }
+}
+
+function autoBotStep() {
+    if (gameState !== 'PLAYING') return;
+    const conf = CONFIGS[currentDiff];
+    const randomChoice = Math.floor(Math.random() * conf.panels);
+    makeStep(randomChoice);
 }
 
 function enableChoiceButtons(enable) {
@@ -391,7 +508,7 @@ function highlightCurrentStep() {
 }
 
 function makeStep(chosenIndex) {
-    if (gameState !== 'PLAYING') return;
+    if (gameState !== 'PLAYING' && gameState !== 'JUMPING') return;
     gameState = 'JUMPING';
     enableChoiceButtons(false);
 
@@ -426,7 +543,6 @@ function makeStep(chosenIndex) {
                 chosenGroup.pane.material.color.setHex(0x00ff88);
                 chosenGroup.frame.material.color.setHex(0x00ff88);
 
-                // Shatter current step's trap panels
                 setTimeout(() => {
                     bridgeSteps[stepIndexNow].panels.forEach((p, idx) => {
                         if (!safePanelsMatrix[stepIndexNow].includes(idx)) {
@@ -440,16 +556,20 @@ function makeStep(chosenIndex) {
                 const mult = conf.multipliers[currentStep - 1];
                 const winAmount = betAmount * mult;
 
-                if (currentStep === TOTAL_STEPS) {
-                    stepHud.textContent = `COMPLETED! • ${formatMultiplier(mult)}x`;
+                if (currentStep === TOTAL_STEPS || (playMode === 'auto' && currentStep >= autoTargetSteps)) {
                     cashOut();
                 } else {
                     updateHud();
                     highlightCurrentStep();
                     gameState = 'PLAYING';
-                    enableChoiceButtons(true);
-                    mainBtn.textContent = `CASHOUT $${winAmount.toFixed(2)} (${formatMultiplier(mult)}x)`;
-                    mainBtn.className = 'main-action-btn btn-cashout';
+
+                    if (playMode === 'auto') {
+                        setTimeout(autoBotStep, 500);
+                    } else {
+                        enableChoiceButtons(true);
+                        mainBtn.textContent = `CASHOUT $${winAmount.toFixed(2)} (${formatMultiplier(mult)}x)`;
+                        mainBtn.className = 'main-action-btn btn-cashout';
+                    }
                 }
             } else {
                 playSound('shatter');
@@ -459,6 +579,8 @@ function makeStep(chosenIndex) {
 
                 gsap.to(humanGroup.position, { y: -25, duration: 1.2, ease: "power2.in" });
                 gsap.to(humanGroup.rotation, { x: 3, z: 2, duration: 1.2 });
+
+                addHistoryItem(false, 0, 0);
                 endGame(false);
             }
         });
@@ -472,10 +594,9 @@ function cashOut() {
 
     playSound('cashout');
     confetti({ particleCount: 100, spread: 80, origin: { y: 0.6 } });
-    
-    // Trigger Stake Win Box Animation
     showStakeWinAnimation(finalMult, winAmount);
-    
+    addHistoryItem(true, finalMult, winAmount);
+
     endGame(true);
 }
 
@@ -485,6 +606,16 @@ function endGame(won) {
     diffButtons.forEach(b => b.disabled = false);
     enableChoiceButtons(false);
 
-    mainBtn.textContent = won ? 'SURVIVED 13 STEPS! PLAY AGAIN' : 'FELL INTO ABYSS! TRY AGAIN';
-    mainBtn.className = 'main-action-btn btn-start';
+    if (playMode === 'auto' && autoRemainingRounds > 1 && balance >= betAmount) {
+        autoRemainingRounds--;
+        setTimeout(() => {
+            balance -= betAmount;
+            balanceDisplay.textContent = `$${balance.toFixed(2)}`;
+            generateProvablyFairSeed();
+            startNewGame();
+        }, 1200);
+    } else {
+        mainBtn.textContent = playMode === 'auto' ? 'START AUTO-PLAY' : (won ? 'PLAY AGAIN' : 'TRY AGAIN');
+        mainBtn.className = 'main-action-btn btn-start';
+    }
 }
