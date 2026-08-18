@@ -9,15 +9,17 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
 </head>
-<body>
+<body data-theme="neon">
     <div class="stage-wrapper">
         <div class="top-bar">
-            <span class="brand-title">GLASS BRIDGE 3D</span>
+            <span class="brand-title" id="brand-title">GLASS BRIDGE 3D</span>
             <div class="top-actions">
+                <button class="icon-btn" id="theme-toggle-btn" title="Toggle Theme">🎨 Neon</button>
+                <button class="icon-btn" id="stats-btn">📊 Stats</button>
                 <button class="icon-btn" id="sound-toggle-btn">🔊</button>
                 <button class="icon-btn" id="fairness-btn">⚖ Fair</button>
-                <div class="wallet-box">
-                    <span class="lbl">BALANCE</span>
+                <div class="wallet-box" title="Click to Top Up +$500">
+                    <span class="lbl">BALANCE ➕</span>
                     <span class="val" id="balance-display">$1,000.00</span>
                 </div>
             </div>
@@ -28,7 +30,6 @@
             <button class="mode-tab" id="tab-auto">Auto-Play</button>
         </div>
 
-        <!-- Dynamic Multiplier Bar -->
         <div class="multiplier-bar-container" id="mult-bar"></div>
 
         <div class="viewport-3d" id="viewport">
@@ -48,7 +49,7 @@
             <div class="decision-overlay" id="decision-buttons"></div>
         </div>
 
-        <!-- Advanced Auto-Strategy Dashboard -->
+        <!-- Auto-Strategy Box -->
         <div class="auto-strategy-box" id="auto-config-box" style="display: none;">
             <div class="auto-grid-row">
                 <div class="auto-field">
@@ -131,6 +132,50 @@
         </div>
     </div>
 
+    <!-- Live Analytics Modal -->
+    <div class="modal-backdrop" id="stats-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>📊 Live Session Analytics</h3>
+                <button class="modal-close" id="close-stats-btn">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <span class="stat-lbl">NET PROFIT</span>
+                        <span class="stat-val" id="stat-net-profit">$0.00</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-lbl">WIN RATE</span>
+                        <span class="stat-val" id="stat-win-rate">0.0%</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-lbl">TOTAL BETS</span>
+                        <span class="stat-val" id="stat-total-bets">0</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-lbl">W / L RATIO</span>
+                        <span class="stat-val" id="stat-wl-ratio">0 / 0</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-lbl">BEST MULTIPLIER</span>
+                        <span class="stat-val highlight" id="stat-best-mult">0.00x</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-lbl">HIGHEST PAYOUT</span>
+                        <span class="stat-val highlight" id="stat-highest-payout">$0.00</span>
+                    </div>
+                    <div class="stat-card full-width">
+                        <span class="stat-lbl">TOTAL WAGERED VOLUME</span>
+                        <span class="stat-val" id="stat-wagered">$0.00</span>
+                    </div>
+                </div>
+                <button class="reset-stats-btn" id="reset-stats-btn">RESET ANALYTICS</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Provably Fair Modal -->
     <div class="modal-backdrop" id="fairness-modal">
         <div class="modal-content">
             <div class="modal-header">

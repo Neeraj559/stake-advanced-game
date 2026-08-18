@@ -1,4 +1,4 @@
-// ---------------- GLOBAL STATE & CONFIG ----------------
+// ---------------- GLOBAL CONFIG ----------------
 const TOTAL_STEPS = 13;
 const MAX_BET_LIMIT = 10000;
 
@@ -27,9 +27,9 @@ const CONFIGS = {
 
 let currentDiff = 'medium';
 let playMode = 'manual';
+let currentTheme = localStorage.getItem('stake_theme') || 'neon';
 let gameState = 'IDLE'; // IDLE, PLAYING, JUMPING, ENDED
 
-// LocalStorage Persistent Balance Load
 let savedBalance = localStorage.getItem('stake_glass_balance');
 let balance = savedBalance !== null ? parseFloat(savedBalance) : 1000.00;
 
@@ -47,6 +47,77 @@ let autoWinAction = 'reset';
 let autoLossAction = 'increase';
 
 let activeParticles = [];
+
+// Session Analytics
+let stats = {
+    totalBets: 0,
+    wins: 0,
+    losses: 0,
+    netProfit: 0.0,
+    wagered: 0.0,
+    bestMultiplier: 0.0,
+    highestPayout: 0.0
+};
+
+function triggerHaptic(type) {
+    if ('vibrate' in navigator) {
+        if (type === 'step') navigator.vibrate(35);
+        else if (type === 'break') navigator.vibrate([70, 50, 120]);
+        else if (type === 'win') navigator.vibrate([40, 40, 40, 40, 80]);
+    }
+}
+
+function loadSavedStats() {
+    const saved = localStorage.getItem('stake_glass_stats');
+    if (saved) {
+        try { stats = Object.assign(stats, JSON.parse(saved)); } catch (e) {}
+    }
+    updateStatsUI();
+}
+
+function saveStats() {
+    localStorage.setItem('stake_glass_stats', JSON.stringify(stats));
+    updateStatsUI();
+}
+
+function updateStatsUI() {
+    const netEl = document.getElementById('stat-net-profit');
+    const winRateEl = document.getElementById('stat-win-rate');
+    const totalBetsEl = document.getElementById('stat-total-bets');
+    const wlRatioEl = document.getElementById('stat-wl-ratio');
+    const bestMultEl = document.getElementById('stat-best-mult');
+    const highestPayoutEl = document.getElementById('stat-highest-payout');
+    const wageredEl = document.getElementById('stat-wagered');
+
+    if (!netEl) return;
+
+    netEl.textContent = `${stats.netProfit >= 0 ? '+' : '-'}$${Math.abs(stats.netProfit).toFixed(2)}`;
+    netEl.className = `stat-val ${stats.netProfit >= 0 ? 'positive' : 'negative'}`;
+
+    const winRate = stats.totalBets > 0 ? ((stats.wins / stats.totalBets) * 100).toFixed(1) : '0.0';
+    winRateEl.textContent = `${winRate}%`;
+    totalBetsEl.textContent = stats.totalBets;
+    wlRatioEl.textContent = `${stats.wins} / ${stats.losses}`;
+    bestMultEl.textContent = `${stats.bestMultiplier.toFixed(2)}x`;
+    highestPayoutEl.textContent = `$${stats.highestPayout.toFixed(2)}`;
+    wageredEl.textContent = `$${stats.wagered.toFixed(2)}`;
+}
+
+function recordGameStats(won, mult, bet, payout) {
+    stats.totalBets++;
+    stats.wagered += bet;
+    if (won) {
+        stats.wins++;
+        const profit = payout - bet;
+        stats.netProfit += profit;
+        if (mult > stats.bestMultiplier) stats.bestMultiplier = mult;
+        if (payout > stats.highestPayout) stats.highestPayout = payout;
+    } else {
+        stats.losses++;
+        stats.netProfit -= bet;
+    }
+    saveStats();
+}
 
 function saveState() {
     localStorage.setItem('stake_glass_balance', balance.toFixed(2));
@@ -71,9 +142,7 @@ function getAudioContext() {
         const AudioContext = window.AudioContext || window.webkitAudioContext;
         audioCtx = new AudioContext();
     }
-    if (audioCtx.state === 'suspended') {
-        audioCtx.resume();
-    }
+    if (audioCtx.state === 'suspended') audioCtx.resume();
     return audioCtx;
 }
 
@@ -100,9 +169,7 @@ function playSynthesizedSound(type) {
             const bufferSize = ctx.sampleRate * 0.45;
             const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
             const data = buffer.getChannelData(0);
-            for (let i = 0; i < bufferSize; i++) {
-                data[i] = Math.random() * 2 - 1;
-            }
+            for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
 
             const noise = ctx.createBufferSource();
             noise.buffer = buffer;
@@ -169,6 +236,12 @@ const soundBtn = document.getElementById('sound-toggle-btn');
 const fairnessBtn = document.getElementById('fairness-btn');
 const fairnessModal = document.getElementById('fairness-modal');
 const closeModalBtn = document.getElementById('close-modal-btn');
+const statsBtn = document.getElementById('stats-btn');
+const statsModal = document.getElementById('stats-modal');
+const closeStatsBtn = document.getElementById('close-stats-btn');
+const resetStatsBtn = document.getElementById('reset-stats-btn');
+const themeBtn = document.getElementById('theme-toggle-btn');
+const brandTitle = document.getElementById('brand-title');
 const serverSeedHash = document.getElementById('server-seed-hash');
 const clientSeed = document.getElementById('client-seed');
 const fairnessNonce = document.getElementById('fairness-nonce');
@@ -185,14 +258,14 @@ const stopProfitInput = document.getElementById('stop-profit-input');
 const stopLossInput = document.getElementById('stop-loss-input');
 
 // ---------------- THREE.JS WORLD ----------------
-let scene, camera, renderer;
+let scene, camera, renderer, dirLight;
 let panels3D = [];
 let characterMesh;
 const STEP_DISTANCE = 3.2;
 
 function initThree() {
     scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x070e17, 0.035);
+    scene.fog = new THREE.FogExp2(currentTheme === 'neon' ? 0x070e17 : 0x11080e, 0.035);
 
     const width = viewport.clientWidth;
     const height = viewport.clientHeight;
@@ -209,14 +282,15 @@ function initThree() {
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.9);
     scene.add(ambientLight);
 
-    const dirLight = new THREE.DirectionalLight(0x00e701, 1.2);
+    dirLight = new THREE.DirectionalLight(currentTheme === 'neon' ? 0x00e701 : 0xff007a, 1.2);
     dirLight.position.set(5, 12, 10);
     scene.add(dirLight);
 
     const charGeo = new THREE.CylinderGeometry(0.35, 0.45, 0.25, 32);
+    const primaryHex = currentTheme === 'neon' ? 0x00e701 : 0xff007a;
     const charMat = new THREE.MeshStandardMaterial({
-        color: 0x00e701,
-        emissive: 0x00e701,
+        color: primaryHex,
+        emissive: primaryHex,
         emissiveIntensity: 0.6,
         roughness: 0.2,
         metalness: 0.8
@@ -226,6 +300,7 @@ function initThree() {
     scene.add(characterMesh);
 
     window.addEventListener('resize', onWindowResize);
+    initTouchSwipe();
     animate();
 }
 
@@ -238,13 +313,13 @@ function onWindowResize() {
     renderer.setSize(width, height);
 }
 
-// ---------------- PARTICLE EFFECTS ----------------
+// ---------------- PARTICLES ----------------
 function triggerGlassShatter(position, width, length) {
     const shardCount = 28;
     const shardGeo = new THREE.TetrahedronGeometry(0.18, 0);
     const shardMat = new THREE.MeshStandardMaterial({
-        color: 0x88ccee,
-        emissive: 0x225577,
+        color: currentTheme === 'neon' ? 0x88ccee : 0xff88bb,
+        emissive: currentTheme === 'neon' ? 0x225577 : 0x551133,
         roughness: 0.1,
         metalness: 0.9,
         transparent: true,
@@ -272,13 +347,7 @@ function triggerGlassShatter(position, width, length) {
         );
 
         scene.add(mesh);
-        activeParticles.push({
-            mesh,
-            velocity,
-            rotSpeed,
-            lifetime: 1.5,
-            age: 0
-        });
+        activeParticles.push({ mesh, velocity, rotSpeed, lifetime: 1.5, age: 0 });
     }
 }
 
@@ -338,7 +407,7 @@ function build3DBridge() {
             const xPos = (c - (numPanels - 1) / 2) * spacing;
             const geo = new THREE.BoxGeometry(panelWidth, 0.1, 1.8);
             const mat = new THREE.MeshStandardMaterial({
-                color: 0x1a334d,
+                color: currentTheme === 'neon' ? 0x1a334d : 0x3d172e,
                 roughness: 0.1,
                 metalness: 0.8,
                 transparent: true,
@@ -403,6 +472,31 @@ function renderDecisionButtons() {
     }
 }
 
+// ---------------- TOUCH / SWIPE GESTURES ----------------
+function initTouchSwipe() {
+    let touchStartX = 0;
+    let touchStartY = 0;
+
+    viewport.addEventListener('touchstart', (e) => {
+        touchStartX = e.changedTouches[0].screenX;
+        touchStartY = e.changedTouches[0].screenY;
+    }, { passive: true });
+
+    viewport.addEventListener('touchend', (e) => {
+        if (gameState !== 'PLAYING' || playMode !== 'manual') return;
+        const diffX = e.changedTouches[0].screenX - touchStartX;
+        const diffY = e.changedTouches[0].screenY - touchStartY;
+
+        if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 30) {
+            const conf = CONFIGS[currentDiff];
+            if (conf.panels === 2) {
+                if (diffX < 0) makeStep(0); // Swipe Left
+                else makeStep(1); // Swipe Right
+            }
+        }
+    }, { passive: true });
+}
+
 // ---------------- PROVABLY FAIR ----------------
 function generateProvablyFairSeed() {
     const randomHex = Array.from({length: 64}, () => Math.floor(Math.random()*16).toString(16)).join('');
@@ -417,7 +511,7 @@ function generateProvablyFairSeed() {
     }
 }
 
-// ---------------- GAMEPLAY & RESTORATION ----------------
+// ---------------- RESTORATION & FLOW ----------------
 function restoreActiveGameIfAny() {
     const savedRound = localStorage.getItem('stake_glass_active_round');
     if (!savedRound) return false;
@@ -438,11 +532,11 @@ function restoreActiveGameIfAny() {
 
             build3DBridge();
 
-            // Reconstruct previous safe steps visuals & position
+            const primaryColor = currentTheme === 'neon' ? 0x00e701 : 0xff007a;
             for (let step = 0; step < currentStep; step++) {
                 const safePanelIndex = bridgePattern[step];
                 if (panels3D[step] && panels3D[step][safePanelIndex]) {
-                    panels3D[step][safePanelIndex].material.color.setHex(0x00e701);
+                    panels3D[step][safePanelIndex].material.color.setHex(primaryColor);
                     panels3D[step][safePanelIndex].material.opacity = 1;
                 }
             }
@@ -451,7 +545,7 @@ function restoreActiveGameIfAny() {
                 const lastSafeIdx = bridgePattern[currentStep - 1];
                 const lastPanel = panels3D[currentStep - 1][lastSafeIdx];
                 characterMesh.position.set(lastPanel.position.x, 0.15, lastPanel.position.z);
-                camera.position.set(0, 4.5, lastPanel.position.z + 7.5);
+                camera.position.set(lastPanel.position.x * 0.4, 4.2, lastPanel.position.z + 6.8);
 
                 const currentMult = CONFIGS[currentDiff].multipliers[currentStep - 1];
                 const currentPayout = (currentBet * currentMult).toFixed(2);
@@ -472,7 +566,7 @@ function restoreActiveGameIfAny() {
 
 function startNewGame() {
     if (balance < currentBet) {
-        alert("Insufficient balance!");
+        alert("Insufficient balance! Click Balance to Top-Up.");
         stopAutoPlay();
         return;
     }
@@ -502,6 +596,7 @@ function makeStep(chosenIndex) {
     const targetPanel = panels3D[currentStep][chosenIndex];
     const isSafe = (chosenIndex === bridgePattern[currentStep]);
 
+    // Jump Tween
     gsap.to(characterMesh.position, {
         x: targetPanel.position.x,
         z: targetPanel.position.z,
@@ -509,23 +604,28 @@ function makeStep(chosenIndex) {
         ease: "power2.out"
     });
     gsap.to(characterMesh.position, {
-        y: 1.2,
+        y: 1.25,
         duration: 0.14,
         yoyo: true,
         repeat: 1,
         ease: "power1.inOut"
     });
 
+    // Cinematic dynamic camera tracking
     gsap.to(camera.position, {
-        z: targetPanel.position.z + 7.5,
-        duration: 0.32,
+        x: targetPanel.position.x * 0.45,
+        y: 4.2,
+        z: targetPanel.position.z + 6.8,
+        duration: 0.35,
         ease: "power2.out"
     });
 
     setTimeout(() => {
         if (isSafe) {
+            triggerHaptic('step');
             playSynthesizedSound('step');
-            targetPanel.material.color.setHex(0x00e701);
+            const primaryColor = currentTheme === 'neon' ? 0x00e701 : 0xff007a;
+            targetPanel.material.color.setHex(primaryColor);
             targetPanel.material.opacity = 1;
 
             currentStep++;
@@ -559,10 +659,13 @@ function makeStep(chosenIndex) {
                 }
             }
         } else {
+            triggerHaptic('break');
             playSynthesizedSound('break');
             triggerGlassShatter(targetPanel.position, 1.4, 1.8);
             targetPanel.visible = false;
 
+            // Dramatic fall cam zoom
+            gsap.to(camera.position, { y: 2.2, duration: 0.6, ease: "power1.in" });
             gsap.to(characterMesh.position, { y: -10, duration: 0.7, ease: "power2.in" });
             setTimeout(() => {
                 endGame(false);
@@ -581,6 +684,7 @@ function cashout(isMaxWin = false) {
     saveState();
     balanceDisplay.textContent = `$${balance.toFixed(2)}`;
 
+    triggerHaptic('win');
     playSynthesizedSound('win');
     if (typeof confetti === 'function') confetti({ particleCount: 70, spread: 60, origin: { y: 0.6 } });
 
@@ -589,6 +693,7 @@ function cashout(isMaxWin = false) {
     winCard.classList.add('show');
 
     addHistoryRecord(true, finalMult, payout);
+    recordGameStats(true, finalMult, currentBet, payout);
     endGame(true);
 }
 
@@ -599,6 +704,7 @@ function endGame(won) {
 
     if (!won) {
         addHistoryRecord(false, 0, currentBet);
+        recordGameStats(false, 0, currentBet, 0);
     }
 
     if (playMode === 'auto' && isAutoRunning) {
@@ -636,7 +742,6 @@ function endGame(won) {
 
         if (autoRemainingBets > 1 || autoRemainingBets === 0) {
             if (autoRemainingBets > 1) autoRemainingBets--;
-            
             setTimeout(() => {
                 if (!isAutoRunning) return;
                 startNewGame();
@@ -708,11 +813,8 @@ function loadSavedHistory() {
 
 function handleMainAction() {
     if (playMode === 'auto') {
-        if (isAutoRunning) {
-            stopAutoPlay();
-        } else {
-            startAutoPlay();
-        }
+        if (isAutoRunning) stopAutoPlay();
+        else startAutoPlay();
     } else {
         if (gameState === 'IDLE' || gameState === 'ENDED') {
             currentBet = parseFloat(betInput.value) || 10;
@@ -723,9 +825,44 @@ function handleMainAction() {
     }
 }
 
+function applyTheme(theme) {
+    currentTheme = theme;
+    document.body.setAttribute('data-theme', theme);
+    localStorage.setItem('stake_theme', theme);
+
+    const primaryColor = theme === 'neon' ? 0x00e701 : 0xff007a;
+    themeBtn.textContent = theme === 'neon' ? '🎨 Neon' : '🦑 Squid';
+    brandTitle.textContent = theme === 'neon' ? 'GLASS BRIDGE 3D' : 'SQUID BRIDGE 3D';
+
+    if (scene) {
+        scene.fog.color.setHex(theme === 'neon' ? 0x070e17 : 0x11080e);
+        if (dirLight) dirLight.color.setHex(primaryColor);
+        if (characterMesh) {
+            characterMesh.material.color.setHex(primaryColor);
+            characterMesh.material.emissive.setHex(primaryColor);
+        }
+    }
+    build3DBridge();
+    updateHud();
+}
+
 // ---------------- EVENT LISTENERS ----------------
 mainBtn.addEventListener('click', handleMainAction);
 
+// Balance Top-up on Click
+document.querySelector('.wallet-box').addEventListener('click', () => {
+    balance += 500;
+    saveState();
+    balanceDisplay.textContent = `$${balance.toFixed(2)}`;
+});
+
+// Theme Switcher
+themeBtn.addEventListener('click', () => {
+    const next = currentTheme === 'neon' ? 'squid' : 'neon';
+    applyTheme(next);
+});
+
+// Strategy Settings
 winResetBtn.addEventListener('click', () => {
     autoWinAction = 'reset';
     winResetBtn.classList.add('active');
@@ -817,8 +954,23 @@ document.getElementById('tab-auto').addEventListener('click', () => {
     decisionButtons.innerHTML = '';
 });
 
+// Modals Trigger
 fairnessBtn.addEventListener('click', () => fairnessModal.classList.add('show'));
 closeModalBtn.addEventListener('click', () => fairnessModal.classList.remove('show'));
+
+statsBtn.addEventListener('click', () => {
+    updateStatsUI();
+    statsModal.classList.add('show');
+});
+closeStatsBtn.addEventListener('click', () => statsModal.classList.remove('show'));
+
+resetStatsBtn.addEventListener('click', () => {
+    if (confirm("Reset all session analytics?")) {
+        stats = { totalBets: 0, wins: 0, losses: 0, netProfit: 0.0, wagered: 0.0, bestMultiplier: 0.0, highestPayout: 0.0 };
+        saveStats();
+    }
+});
+
 soundBtn.addEventListener('click', () => {
     soundEnabled = !soundEnabled;
     soundBtn.textContent = soundEnabled ? '🔊' : '🔇';
@@ -828,7 +980,9 @@ soundBtn.addEventListener('click', () => {
 window.addEventListener('DOMContentLoaded', () => {
     balanceDisplay.textContent = `$${balance.toFixed(2)}`;
     loadSavedHistory();
+    loadSavedStats();
     initThree();
+    applyTheme(currentTheme);
     generateProvablyFairSeed();
 
     const restored = restoreActiveGameIfAny();
