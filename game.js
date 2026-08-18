@@ -304,24 +304,32 @@ const serverSeedHashInput = document.getElementById('server-seed-hash');
 const fairnessNonceInput = document.getElementById('fairness-nonce');
 const soundToggleBtn = document.getElementById('sound-toggle-btn');
 
-// Mode Tab Switching
-tabManual.addEventListener('click', () => {
-    if (gameState === 'PLAYING') return;
-    playMode = 'manual';
-    tabManual.classList.add('active');
-    tabAuto.classList.remove('active');
-    autoConfigBox.style.display = 'none';
-    mainBtn.textContent = 'START CROSSING';
-});
+// Mode Tab Switching (Smooth & Responsive)
+function switchMode(mode) {
+    if (gameState === 'JUMPING') return;
+    playMode = mode;
 
-tabAuto.addEventListener('click', () => {
-    if (gameState === 'PLAYING') return;
-    playMode = 'auto';
-    tabAuto.classList.add('active');
-    tabManual.classList.remove('active');
-    autoConfigBox.style.display = 'block';
-    mainBtn.textContent = 'START AUTO-PLAY';
-});
+    if (mode === 'manual') {
+        tabManual.classList.add('active');
+        tabAuto.classList.remove('active');
+        if (autoConfigBox) autoConfigBox.style.display = 'none';
+        if (gameState !== 'PLAYING') {
+            mainBtn.textContent = 'START CROSSING';
+            mainBtn.className = 'main-action-btn btn-start';
+        }
+    } else {
+        tabAuto.classList.add('active');
+        tabManual.classList.remove('active');
+        if (autoConfigBox) autoConfigBox.style.display = 'flex';
+        if (gameState !== 'PLAYING') {
+            mainBtn.textContent = 'START AUTO-PLAY';
+            mainBtn.className = 'main-action-btn btn-start';
+        }
+    }
+}
+
+tabManual.onclick = (e) => { e.stopPropagation(); switchMode('manual'); };
+tabAuto.onclick = (e) => { e.stopPropagation(); switchMode('auto'); };
 
 // Sound Toggle
 soundToggleBtn.addEventListener('click', () => {
@@ -391,7 +399,7 @@ renderDecisionButtons();
 
 diffButtons.forEach(btn => {
     btn.addEventListener('click', () => {
-        if (gameState === 'PLAYING') return;
+        if (gameState === 'PLAYING' || gameState === 'JUMPING') return;
         diffButtons.forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         currentDiff = btn.dataset.diff;
@@ -403,22 +411,25 @@ diffButtons.forEach(btn => {
 
 chipButtons.forEach(chip => {
     chip.addEventListener('click', () => {
-        if (gameState === 'PLAYING') return;
+        if (gameState === 'PLAYING' || gameState === 'JUMPING') return;
         const amt = parseFloat(chip.dataset.amt);
         betInput.value = Math.min(amt, balance, MAX_BET_LIMIT);
     });
 });
 
 btnHalf.addEventListener('click', () => {
+    if (gameState === 'PLAYING' || gameState === 'JUMPING') return;
     betInput.value = Math.max(1, Math.floor(parseFloat(betInput.value) / 2));
 });
 
 btnDouble.addEventListener('click', () => {
+    if (gameState === 'PLAYING' || gameState === 'JUMPING') return;
     const doubled = parseFloat(betInput.value) * 2;
     betInput.value = Math.min(doubled, balance, MAX_BET_LIMIT);
 });
 
 btnMax.addEventListener('click', () => {
+    if (gameState === 'PLAYING' || gameState === 'JUMPING') return;
     betInput.value = Math.min(balance, MAX_BET_LIMIT);
 });
 
@@ -508,7 +519,7 @@ function highlightCurrentStep() {
 }
 
 function makeStep(chosenIndex) {
-    if (gameState !== 'PLAYING' && gameState !== 'JUMPING') return;
+    if (gameState !== 'PLAYING') return;
     gameState = 'JUMPING';
     enableChoiceButtons(false);
 
@@ -601,7 +612,7 @@ function cashOut() {
 }
 
 function endGame(won) {
-    gameState = 'ENDED';
+    gameState = 'IDLE';
     betInput.disabled = false;
     diffButtons.forEach(b => b.disabled = false);
     enableChoiceButtons(false);
@@ -609,10 +620,12 @@ function endGame(won) {
     if (playMode === 'auto' && autoRemainingRounds > 1 && balance >= betAmount) {
         autoRemainingRounds--;
         setTimeout(() => {
-            balance -= betAmount;
-            balanceDisplay.textContent = `$${balance.toFixed(2)}`;
-            generateProvablyFairSeed();
-            startNewGame();
+            if (playMode === 'auto') {
+                balance -= betAmount;
+                balanceDisplay.textContent = `$${balance.toFixed(2)}`;
+                generateProvablyFairSeed();
+                startNewGame();
+            }
         }, 1200);
     } else {
         mainBtn.textContent = playMode === 'auto' ? 'START AUTO-PLAY' : (won ? 'PLAY AGAIN' : 'TRY AGAIN');
