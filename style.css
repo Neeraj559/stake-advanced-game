@@ -1,621 +1,494 @@
-const TOTAL_STEPS = 13;
-const MAX_BET_LIMIT = 10000;
-
-const CONFIGS = {
-    easy: {
-        panels: 3,
-        safeCount: 2,
-        multipliers: [1.15, 1.30, 1.50, 1.80, 2.20, 2.80, 3.60, 4.80, 6.50, 9.00, 13.00, 18.00, 25.00],
-        offsets: [-1.15, 0, 1.15],
-        labels: ['LEFT', 'CENTER', 'RIGHT']
-    },
-    medium: {
-        panels: 2,
-        safeCount: 1,
-        multipliers: [1.18, 1.40, 1.75, 2.25, 3.00, 4.20, 6.00, 9.00, 14.00, 22.00, 38.00, 62.00, 100.00],
-        offsets: [-0.95, 0.95],
-        labels: ['LEFT', 'RIGHT']
-    },
-    hard: {
-        panels: 3,
-        safeCount: 1,
-        multipliers: [1.25, 1.65, 2.30, 3.30, 5.00, 8.00, 13.50, 24.00, 45.00, 90.00, 180.00, 320.00, 500.00],
-        offsets: [-1.15, 0, 1.15],
-        labels: ['LEFT', 'CENTER', 'RIGHT']
-    },
-    extreme: {
-        panels: 4,
-        safeCount: 1,
-        multipliers: [1.35, 1.95, 3.10, 5.20, 8.90, 15.50, 28.00, 52.00, 105.00, 240.00, 580.00, 1550.00, 5000.00],
-        offsets: [-1.4, -0.47, 0.47, 1.4],
-        labels: ['P1', 'P2', 'P3', 'P4']
-    }
-};
-
-let currentDiff = 'medium';
-let balance = 1000;
-let betAmount = 10;
-let currentStep = 0;
-let safePanelsMatrix = [];
-let gameState = 'IDLE';
-
-// Auto Play State
-let playMode = 'manual';
-let autoRemainingRounds = 0;
-let autoTargetSteps = 3;
-
-// Provably Fair State
-let nonce = 0;
-let currentServerSeed = '';
-
-// Web Audio & Ambient Synth
-const AudioCtx = window.AudioContext || window.webkitAudioContext;
-let audio = null;
-let ambientOsc = null;
-let ambientGain = null;
-let soundEnabled = true;
-
-function initAudio() {
-    if (!audio) {
-        audio = new AudioCtx();
-        startAmbientDrone();
-    }
-    if (audio.state === 'suspended') audio.resume();
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
 }
 
-function startAmbientDrone() {
-    try {
-        ambientOsc = audio.createOscillator();
-        ambientGain = audio.createGain();
-        ambientOsc.type = 'sine';
-        ambientOsc.frequency.setValueAtTime(55, audio.currentTime); // Low A hum
-        ambientGain.gain.setValueAtTime(0.04, audio.currentTime);
-        ambientOsc.connect(ambientGain);
-        ambientGain.connect(audio.destination);
-        ambientOsc.start();
-    } catch(e) {}
+body {
+    background: #020408;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: #fff;
+    overflow: hidden;
 }
 
-function playSound(type) {
-    if (!soundEnabled) return;
-    initAudio();
-    const now = audio.currentTime;
-    const osc = audio.createOscillator();
-    const gain = audio.createGain();
-    osc.connect(gain);
-    gain.connect(audio.destination);
-
-    if (type === 'jump') {
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(240, now);
-        osc.frequency.exponentialRampToValueAtTime(540, now + 0.18);
-        gain.gain.setValueAtTime(0.25, now);
-        gain.gain.linearRampToValueAtTime(0.01, now + 0.18);
-        osc.start(now);
-        osc.stop(now + 0.18);
-    } else if (type === 'land') {
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(460, now);
-        gain.gain.setValueAtTime(0.3, now);
-        gain.gain.linearRampToValueAtTime(0.01, now + 0.12);
-        osc.start(now);
-        osc.stop(now + 0.12);
-    } else if (type === 'shatter') {
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(160, now);
-        osc.frequency.exponentialRampToValueAtTime(30, now + 0.5);
-        gain.gain.setValueAtTime(0.5, now);
-        gain.gain.linearRampToValueAtTime(0.01, now + 0.5);
-        osc.start(now);
-        osc.stop(now + 0.5);
-    } else if (type === 'cashout') {
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(520, now);
-        osc.frequency.linearRampToValueAtTime(1040, now + 0.35);
-        gain.gain.setValueAtTime(0.4, now);
-        gain.gain.linearRampToValueAtTime(0.01, now + 0.35);
-        osc.start(now);
-        osc.stop(now + 0.35);
-    }
+.stage-wrapper {
+    width: 100%;
+    max-width: 440px;
+    height: 100vh;
+    max-height: 940px;
+    background: radial-gradient(circle at 50% 10%, #0d1826 0%, #050912 70%, #020408 100%);
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    gap: 8px;
+    border-radius: 16px;
+    border: 1px solid #162436;
+    box-shadow: 0 0 60px rgba(0, 0, 0, 0.95);
+    position: relative;
+    padding: 10px 12px;
+    overflow-y: auto;
 }
 
-// ---------------- THREE.JS 3D SCENE ----------------
-const viewport = document.getElementById('viewport');
-const scene = new THREE.Scene();
-scene.fog = new THREE.FogExp2(0x02060e, 0.022);
-
-const camera = new THREE.PerspectiveCamera(52, viewport.clientWidth / viewport.clientHeight, 0.1, 1000);
-const INITIAL_CAM_POS = { x: 0, y: 3.5, z: 4.6 };
-camera.position.set(INITIAL_CAM_POS.x, INITIAL_CAM_POS.y, INITIAL_CAM_POS.z);
-camera.lookAt(0, 0.8, -8);
-
-const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-renderer.setSize(viewport.clientWidth, viewport.clientHeight);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-viewport.appendChild(renderer.domElement);
-
-scene.add(new THREE.AmbientLight(0x406085, 0.9));
-const dirLight = new THREE.DirectionalLight(0x00e7ff, 1.2);
-dirLight.position.set(10, 20, 10);
-scene.add(dirLight);
-
-const STEP_DISTANCE = 3.2;
-const bridgeSteps = [];
-const shardParticles = [];
-
-function createGlassTile(x, z, width = 1.1) {
-    const group = new THREE.Group();
-    const glassMat = new THREE.MeshPhysicalMaterial({
-        color: 0x00d2ff,
-        transparent: true,
-        opacity: 0.45,
-        roughness: 0.1,
-        metalness: 0.15,
-        transmission: 0.85,
-        ior: 1.5
-    });
-    const paneGeom = new THREE.BoxGeometry(width, 0.08, 1.8);
-    const pane = new THREE.Mesh(paneGeom, glassMat);
-    group.add(pane);
-
-    const frameGeom = new THREE.EdgesGeometry(paneGeom);
-    const frameMat = new THREE.LineBasicMaterial({ color: 0x00e7ff, linewidth: 2 });
-    const frame = new THREE.LineSegments(frameGeom, frameMat);
-    group.add(frame);
-
-    group.position.set(x, 0, z);
-    group.pane = pane;
-    group.frame = frame;
-    return group;
+.stage-wrapper::-webkit-scrollbar {
+    display: none;
 }
 
-function build3DBridge() {
-    bridgeSteps.forEach(s => s.panels.forEach(p => scene.remove(p)));
-    bridgeSteps.length = 0;
-
-    const conf = CONFIGS[currentDiff];
-    const tileWidth = conf.panels === 4 ? 0.72 : conf.panels === 3 ? 0.95 : 1.25;
-
-    for (let i = 0; i < TOTAL_STEPS; i++) {
-        const z = -i * STEP_DISTANCE - 2.0;
-        const panels = [];
-
-        conf.offsets.forEach((x, panelIdx) => {
-            const tile = createGlassTile(x, z, tileWidth);
-            tile.userData = { stepIdx: i, panelIdx: panelIdx };
-            scene.add(tile);
-            panels.push(tile);
-        });
-
-        bridgeSteps.push({ panels, z });
-    }
-}
-build3DBridge();
-
-// Human Avatar
-const humanGroup = new THREE.Group();
-const skinMat = new THREE.MeshLambertMaterial({ color: 0xffdbac });
-const jacketMat = new THREE.MeshLambertMaterial({ color: 0x00ff88 });
-const pantsMat = new THREE.MeshLambertMaterial({ color: 0x101b26 });
-
-const head = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.26, 0.24), skinMat);
-head.position.y = 1.05;
-humanGroup.add(head);
-
-const torso = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.48, 0.24), jacketMat);
-torso.position.y = 0.68;
-humanGroup.add(torso);
-
-const leftLeg = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.44, 0.16), pantsMat);
-leftLeg.position.set(-0.1, 0.22, 0);
-humanGroup.add(leftLeg);
-
-const rightLeg = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.44, 0.16), pantsMat);
-rightLeg.position.set(0.1, 0.22, 0);
-humanGroup.add(rightLeg);
-
-humanGroup.position.set(0, 0.05, 0.8);
-scene.add(humanGroup);
-
-function triggerGlassShatter(x, y, z) {
-    const shardGeom = new THREE.TetrahedronGeometry(0.14, 0);
-    const shardMat = new THREE.MeshBasicMaterial({ color: 0x00e7ff, wireframe: true });
-
-    for (let i = 0; i < 24; i++) {
-        const shard = new THREE.Mesh(shardGeom, shardMat);
-        shard.position.set(x + (Math.random() - 0.5) * 0.8, y, z + (Math.random() - 0.5) * 0.8);
-        shard.velocity = new THREE.Vector3((Math.random() - 0.5) * 0.14, Math.random() * 0.08 - 0.04, (Math.random() - 0.5) * 0.14);
-        scene.add(shard);
-        shardParticles.push(shard);
-    }
+/* Top Bar */
+.top-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #162436;
+    padding-bottom: 6px;
 }
 
-// Raycaster
-const raycaster = new THREE.Raycaster();
-const mouse = new THREE.Vector2();
-
-viewport.addEventListener('click', (e) => {
-    if (gameState !== 'PLAYING' || playMode === 'auto') return;
-    const rect = viewport.getBoundingClientRect();
-    mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-    mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-
-    raycaster.setFromCamera(mouse, camera);
-    const currentStepPanels = bridgeSteps[currentStep].panels.map(p => p.pane);
-    const intersects = raycaster.intersectObjects(currentStepPanels);
-
-    if (intersects.length > 0) {
-        const parentGroup = intersects[0].object.parent;
-        makeStep(parentGroup.userData.panelIdx);
-    }
-});
-
-function animate() {
-    requestAnimationFrame(animate);
-
-    if (gameState === 'PLAYING' || gameState === 'IDLE') {
-        humanGroup.position.y = 0.05 + Math.sin(Date.now() * 0.005) * 0.02;
-    }
-
-    for (let i = shardParticles.length - 1; i >= 0; i--) {
-        const s = shardParticles[i];
-        s.position.add(s.velocity);
-        s.velocity.y -= 0.008;
-        s.rotation.x += 0.06;
-
-        if (s.position.y < -25) {
-            scene.remove(s);
-            shardParticles.splice(i, 1);
-        }
-    }
-
-    renderer.render(scene, camera);
-}
-animate();
-
-// ---------------- GAMEPLAY & CONTROLS ----------------
-const balanceDisplay = document.getElementById('balance-display');
-const betInput = document.getElementById('bet-input');
-const mainBtn = document.getElementById('main-btn');
-const btnHalf = document.getElementById('btn-half');
-const btnDouble = document.getElementById('btn-double');
-const btnMax = document.getElementById('btn-max');
-const stepHud = document.getElementById('step-hud');
-const decisionButtons = document.getElementById('decision-buttons');
-const diffButtons = document.querySelectorAll('.diff-btn');
-const chipButtons = document.querySelectorAll('.chip-btn');
-const winCard = document.getElementById('stake-win-card');
-const winMultiplier = document.getElementById('win-multiplier');
-const winPayout = document.getElementById('win-payout');
-const historyList = document.getElementById('history-list');
-
-// Tabs & Auto Mode Elements
-const tabManual = document.getElementById('tab-manual');
-const tabAuto = document.getElementById('tab-auto');
-const autoConfigBox = document.getElementById('auto-config-box');
-const autoRoundsInput = document.getElementById('auto-rounds-input');
-const autoStepsInput = document.getElementById('auto-steps-input');
-
-// Fairness Elements
-const fairnessBtn = document.getElementById('fairness-btn');
-const fairnessModal = document.getElementById('fairness-modal');
-const closeModalBtn = document.getElementById('close-modal-btn');
-const serverSeedHashInput = document.getElementById('server-seed-hash');
-const fairnessNonceInput = document.getElementById('fairness-nonce');
-const soundToggleBtn = document.getElementById('sound-toggle-btn');
-
-// Mode Tab Switching
-tabManual.addEventListener('click', () => {
-    if (gameState === 'PLAYING') return;
-    playMode = 'manual';
-    tabManual.classList.add('active');
-    tabAuto.classList.remove('active');
-    autoConfigBox.style.display = 'none';
-    mainBtn.textContent = 'START CROSSING';
-});
-
-tabAuto.addEventListener('click', () => {
-    if (gameState === 'PLAYING') return;
-    playMode = 'auto';
-    tabAuto.classList.add('active');
-    tabManual.classList.remove('active');
-    autoConfigBox.style.display = 'block';
-    mainBtn.textContent = 'START AUTO-PLAY';
-});
-
-// Sound Toggle
-soundToggleBtn.addEventListener('click', () => {
-    soundEnabled = !soundEnabled;
-    soundToggleBtn.textContent = soundEnabled ? '🔊' : '🔇';
-    if (ambientGain) {
-        ambientGain.gain.setValueAtTime(soundEnabled ? 0.04 : 0, audio.currentTime);
-    }
-});
-
-// Provably Fair Modal
-fairnessBtn.addEventListener('click', () => fairnessModal.style.display = 'flex');
-closeModalBtn.addEventListener('click', () => fairnessModal.style.display = 'none');
-
-// SHA-256 Pseudo Generator for Provably Fair
-function generateProvablyFairSeed() {
-    nonce++;
-    currentServerSeed = 'seed_' + Math.random().toString(36).substring(2) + Date.now().toString(36);
-    serverSeedHashInput.value = 'hash_' + Array.from(currentServerSeed).reduce((h, c) => (h = ((h << 5) - h) + c.charCodeAt(0)) | 0, 0).toString(16);
-    fairnessNonceInput.value = nonce;
-}
-generateProvablyFairSeed();
-
-function showStakeWinAnimation(multiplier, amount) {
-    winMultiplier.textContent = `${multiplier.toFixed(2)}×`;
-    winPayout.textContent = `$${amount.toFixed(2)}`;
-
-    gsap.killTweensOf(winCard);
-    gsap.timeline()
-        .fromTo(winCard, 
-            { scale: 0.3, opacity: 0 }, 
-            { scale: 1, opacity: 1, duration: 0.35, ease: "back.out(2)" }
-        )
-        .to(winCard, {
-            scale: 0.8,
-            opacity: 0,
-            delay: 2.2,
-            duration: 0.3,
-            ease: "power2.in"
-        });
+.brand-title {
+    font-size: 14px;
+    font-weight: 900;
+    letter-spacing: 1.5px;
+    background: linear-gradient(90deg, #00e7ff, #00ff88);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
 }
 
-function addHistoryItem(isWin, mult, amt) {
-    const item = document.createElement('div');
-    item.className = `history-item ${isWin ? 'win' : 'loss'}`;
-    item.innerHTML = `
-        <span>${isWin ? mult.toFixed(2) + 'x' : '0.00x'}</span>
-        <span>${isWin ? '+$' + amt.toFixed(2) : '-$' + betAmount.toFixed(2)}</span>
-    `;
-    historyList.prepend(item);
-    if (historyList.children.length > 10) historyList.removeChild(historyList.lastChild);
+.top-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
-function renderDecisionButtons() {
-    decisionButtons.innerHTML = '';
-    const conf = CONFIGS[currentDiff];
-    conf.labels.forEach((label, idx) => {
-        const btn = document.createElement('button');
-        btn.className = 'choice-btn';
-        btn.textContent = label;
-        btn.disabled = true;
-        btn.addEventListener('click', () => makeStep(idx));
-        decisionButtons.appendChild(btn);
-    });
-}
-renderDecisionButtons();
-
-diffButtons.forEach(btn => {
-    btn.addEventListener('click', () => {
-        if (gameState === 'PLAYING') return;
-        diffButtons.forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        currentDiff = btn.dataset.diff;
-        build3DBridge();
-        renderDecisionButtons();
-        updateHud();
-    });
-});
-
-chipButtons.forEach(chip => {
-    chip.addEventListener('click', () => {
-        if (gameState === 'PLAYING') return;
-        const amt = parseFloat(chip.dataset.amt);
-        betInput.value = Math.min(amt, balance, MAX_BET_LIMIT);
-    });
-});
-
-btnHalf.addEventListener('click', () => {
-    betInput.value = Math.max(1, Math.floor(parseFloat(betInput.value) / 2));
-});
-
-btnDouble.addEventListener('click', () => {
-    const doubled = parseFloat(betInput.value) * 2;
-    betInput.value = Math.min(doubled, balance, MAX_BET_LIMIT);
-});
-
-btnMax.addEventListener('click', () => {
-    betInput.value = Math.min(balance, MAX_BET_LIMIT);
-});
-
-mainBtn.addEventListener('click', handleMainAction);
-
-function formatMultiplier(mult) {
-    if (mult >= 1000) return `${(mult / 1000).toFixed(1)}k`;
-    return mult.toFixed(2);
+.icon-btn {
+    background: #0e1b2a;
+    border: 1px solid #1c2e42;
+    color: #8fa7be;
+    font-size: 11px;
+    font-weight: 800;
+    padding: 4px 8px;
+    border-radius: 6px;
+    cursor: pointer;
 }
 
-function updateHud() {
-    const mult = CONFIGS[currentDiff].multipliers[currentStep];
-    stepHud.textContent = `${currentDiff.toUpperCase()} • STEP ${currentStep + 1} / ${TOTAL_STEPS} • ${formatMultiplier(mult)}x`;
+.wallet-box {
+    text-align: right;
 }
 
-function handleMainAction() {
-    if (gameState === 'IDLE' || gameState === 'ENDED') {
-        betAmount = parseFloat(betInput.value);
-        if (isNaN(betAmount) || betAmount <= 0 || betAmount > balance || betAmount > MAX_BET_LIMIT) return;
-
-        if (playMode === 'auto') {
-            autoRemainingRounds = parseInt(autoRoundsInput.value) || 1;
-            autoTargetSteps = Math.min(13, parseInt(autoStepsInput.value) || 3);
-        }
-
-        generateProvablyFairSeed();
-        gsap.to(winCard, { opacity: 0, scale: 0, duration: 0.15 });
-
-        balance -= betAmount;
-        balanceDisplay.textContent = `$${balance.toFixed(2)}`;
-        startNewGame();
-    } else if (gameState === 'PLAYING' && currentStep > 0 && playMode === 'manual') {
-        cashOut();
-    }
+.lbl {
+    font-size: 8.5px;
+    font-weight: 800;
+    color: #6a829a;
+    display: block;
+    margin-bottom: 2px;
 }
 
-function startNewGame() {
-    gameState = 'PLAYING';
-    currentStep = 0;
-    betInput.disabled = true;
-    diffButtons.forEach(b => b.disabled = true);
-
-    const conf = CONFIGS[currentDiff];
-    safePanelsMatrix = [];
-
-    for (let i = 0; i < TOTAL_STEPS; i++) {
-        const indices = Array.from({ length: conf.panels }, (_, k) => k);
-        const shuffled = indices.sort(() => 0.5 - Math.random());
-        safePanelsMatrix.push(shuffled.slice(0, conf.safeCount));
-    }
-
-    build3DBridge();
-    updateHud();
-
-    gsap.to(humanGroup.position, { x: 0, y: 0.05, z: 0.8, duration: 0.4 });
-    gsap.to(humanGroup.rotation, { x: 0, y: 0, z: 0, duration: 0.4 });
-    gsap.to(camera.position, { x: INITIAL_CAM_POS.x, y: INITIAL_CAM_POS.y, z: INITIAL_CAM_POS.z, duration: 0.4 });
-
-    highlightCurrentStep();
-
-    if (playMode === 'auto') {
-        mainBtn.textContent = `AUTO PLAYING (${autoRemainingRounds} LEFT)`;
-        mainBtn.className = 'main-action-btn btn-disabled';
-        setTimeout(autoBotStep, 600);
-    } else {
-        enableChoiceButtons(true);
-        mainBtn.textContent = 'CHOOSE A PANEL';
-        mainBtn.className = 'main-action-btn btn-disabled';
-    }
+.val {
+    font-size: 13px;
+    font-weight: 900;
+    color: #fff;
 }
 
-function autoBotStep() {
-    if (gameState !== 'PLAYING') return;
-    const conf = CONFIGS[currentDiff];
-    const randomChoice = Math.floor(Math.random() * conf.panels);
-    makeStep(randomChoice);
+/* Mode Tabs */
+.mode-tabs {
+    display: flex;
+    background: #070e17;
+    border-radius: 8px;
+    border: 1px solid #162436;
+    padding: 2px;
+    gap: 4px;
+    position: relative;
+    z-index: 50;
+    pointer-events: auto;
 }
 
-function enableChoiceButtons(enable) {
-    Array.from(decisionButtons.children).forEach(btn => btn.disabled = !enable);
+.mode-tab {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: #6a829a;
+    font-size: 11px;
+    font-weight: 800;
+    padding: 6px 0;
+    border-radius: 6px;
+    cursor: pointer;
+    position: relative;
+    z-index: 51;
+    pointer-events: auto;
 }
 
-function highlightCurrentStep() {
-    if (currentStep >= TOTAL_STEPS) return;
-    const step = bridgeSteps[currentStep];
-    step.panels.forEach(p => p.frame.material.color.setHex(0x00ff88));
+.mode-tab.active {
+    background: #162638;
+    color: #00e7ff;
 }
 
-function makeStep(chosenIndex) {
-    if (gameState !== 'PLAYING' && gameState !== 'JUMPING') return;
-    gameState = 'JUMPING';
-    enableChoiceButtons(false);
-
-    const stepIndexNow = currentStep;
-    const conf = CONFIGS[currentDiff];
-    const targetX = conf.offsets[chosenIndex];
-    const targetZ = bridgeSteps[stepIndexNow].z;
-    const isSafe = safePanelsMatrix[stepIndexNow].includes(chosenIndex);
-
-    playSound('jump');
-
-    gsap.timeline()
-        .to(humanGroup.position, {
-            x: targetX,
-            z: targetZ,
-            duration: 0.42,
-            ease: "power1.inOut"
-        })
-        .to(humanGroup.position, {
-            y: 1.5,
-            duration: 0.21,
-            yoyo: true,
-            repeat: 1,
-            ease: "power2.out"
-        }, 0)
-        .call(() => {
-            gsap.to(camera.position, { z: targetZ + 5.5, y: 3.4, duration: 0.45 });
-
-            if (isSafe) {
-                playSound('land');
-                const chosenGroup = bridgeSteps[stepIndexNow].panels[chosenIndex];
-                chosenGroup.pane.material.color.setHex(0x00ff88);
-                chosenGroup.frame.material.color.setHex(0x00ff88);
-
-                setTimeout(() => {
-                    bridgeSteps[stepIndexNow].panels.forEach((p, idx) => {
-                        if (!safePanelsMatrix[stepIndexNow].includes(idx)) {
-                            triggerGlassShatter(conf.offsets[idx], 0, targetZ);
-                            scene.remove(p);
-                        }
-                    });
-                }, 150);
-
-                currentStep++;
-                const mult = conf.multipliers[currentStep - 1];
-                const winAmount = betAmount * mult;
-
-                if (currentStep === TOTAL_STEPS || (playMode === 'auto' && currentStep >= autoTargetSteps)) {
-                    cashOut();
-                } else {
-                    updateHud();
-                    highlightCurrentStep();
-                    gameState = 'PLAYING';
-
-                    if (playMode === 'auto') {
-                        setTimeout(autoBotStep, 500);
-                    } else {
-                        enableChoiceButtons(true);
-                        mainBtn.textContent = `CASHOUT $${winAmount.toFixed(2)} (${formatMultiplier(mult)}x)`;
-                        mainBtn.className = 'main-action-btn btn-cashout';
-                    }
-                }
-            } else {
-                playSound('shatter');
-                const brokenGroup = bridgeSteps[stepIndexNow].panels[chosenIndex];
-                triggerGlassShatter(targetX, 0, targetZ);
-                scene.remove(brokenGroup);
-
-                gsap.to(humanGroup.position, { y: -25, duration: 1.2, ease: "power2.in" });
-                gsap.to(humanGroup.rotation, { x: 3, z: 2, duration: 1.2 });
-
-                addHistoryItem(false, 0, 0);
-                endGame(false);
-            }
-        });
+/* 3D Viewport */
+.viewport-3d {
+    position: relative;
+    width: 100%;
+    height: 380px;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid #162436;
+    background: #040810;
+    flex-shrink: 0;
+    z-index: 1;
 }
 
-function cashOut() {
-    const finalMult = CONFIGS[currentDiff].multipliers[currentStep - 1];
-    const winAmount = betAmount * finalMult;
-    balance += winAmount;
-    balanceDisplay.textContent = `$${balance.toFixed(2)}`;
-
-    playSound('cashout');
-    confetti({ particleCount: 100, spread: 80, origin: { y: 0.6 } });
-    showStakeWinAnimation(finalMult, winAmount);
-    addHistoryItem(true, finalMult, winAmount);
-
-    endGame(true);
+.viewport-3d canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100% !important;
+    height: 100% !important;
+    pointer-events: none;
 }
 
-function endGame(won) {
-    gameState = 'ENDED';
-    betInput.disabled = false;
-    diffButtons.forEach(b => b.disabled = false);
-    enableChoiceButtons(false);
+.step-hud-badge {
+    position: absolute;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(6, 12, 20, 0.9);
+    border: 1px solid #00e7ff;
+    padding: 4px 14px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 900;
+    color: #00e7ff;
+    box-shadow: 0 0 15px rgba(0, 231, 255, 0.3);
+    backdrop-filter: blur(8px);
+    z-index: 10;
+    white-space: nowrap;
+    pointer-events: none;
+}
 
-    if (playMode === 'auto' && autoRemainingRounds > 1 && balance >= betAmount) {
-        autoRemainingRounds--;
-        setTimeout(() => {
-            balance -= betAmount;
-            balanceDisplay.textContent = `$${balance.toFixed(2)}`;
-            generateProvablyFairSeed();
-            startNewGame();
-        }, 1200);
-    } else {
-        mainBtn.textContent = playMode === 'auto' ? 'START AUTO-PLAY' : (won ? 'PLAY AGAIN' : 'TRY AGAIN');
-        mainBtn.className = 'main-action-btn btn-start';
-    }
+/* Stake Win Card Popup */
+.stake-win-card {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0);
+    z-index: 9999 !important;
+    pointer-events: none;
+    opacity: 0;
+}
+
+.win-card-inner {
+    background: rgba(13, 30, 22, 0.95);
+    border: 3px solid #00e701;
+    border-radius: 14px;
+    padding: 16px 28px;
+    min-width: 170px;
+    text-align: center;
+    box-shadow: 0 0 40px rgba(0, 231, 1, 0.6), inset 0 0 20px rgba(0, 231, 1, 0.2);
+    backdrop-filter: blur(10px);
+}
+
+.win-multiplier {
+    font-size: 26px;
+    font-weight: 900;
+    color: #00e701;
+    line-height: 1.1;
+    text-shadow: 0 0 12px rgba(0, 231, 1, 0.8);
+}
+
+.win-divider {
+    width: 100%;
+    height: 1.5px;
+    background: #1b4329;
+    margin: 6px 0;
+}
+
+.win-payout-box {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.payout-amt {
+    font-size: 14px;
+    font-weight: 900;
+    color: #00e701;
+}
+
+.crypto-icon {
+    font-size: 13px;
+}
+
+.decision-overlay {
+    position: absolute;
+    bottom: 8px;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    gap: 6px;
+    z-index: 10;
+    pointer-events: none;
+    padding: 0 8px;
+}
+
+.choice-btn {
+    pointer-events: auto;
+    flex: 1;
+    background: rgba(7, 14, 24, 0.88);
+    border: 1.5px solid #00d2ff;
+    border-radius: 6px;
+    padding: 8px 2px;
+    color: #00d2ff;
+    font-size: 11px;
+    font-weight: 900;
+    cursor: pointer;
+    backdrop-filter: blur(8px);
+}
+
+.choice-btn:disabled {
+    border-color: #1a2a3d;
+    color: #35475c;
+    background: rgba(6, 12, 20, 0.5);
+    cursor: not-allowed;
+}
+
+/* Controls */
+.control-dashboard {
+    background: #0b1420;
+    border-radius: 12px;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    border: 1px solid #162436;
+    position: relative;
+    z-index: 20;
+}
+
+.difficulty-pill-box {
+    display: flex;
+    background: #050a10;
+    border: 1px solid #162638;
+    border-radius: 8px;
+    padding: 2px;
+    gap: 3px;
+}
+
+.diff-btn {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: #6a829a;
+    font-size: 10px;
+    font-weight: 800;
+    padding: 6px 0;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.diff-btn.active {
+    background: #162638;
+    color: #00e7ff;
+}
+
+.input-row {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.input-shell {
+    flex: 1;
+    background: #050a10;
+    border: 1px solid #162638;
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.input-shell input, .auto-field input, .modal-body input {
+    width: 100%;
+    background: #050a10;
+    border: none;
+    outline: none;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 800;
+    padding: 6px 8px;
+}
+
+.btn-modifier {
+    background: #162436;
+    border: none;
+    color: #6a829a;
+    font-size: 10px;
+    font-weight: 800;
+    padding: 0 8px;
+    height: 28px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.quick-chips-row {
+    display: flex;
+    gap: 5px;
+}
+
+.chip-btn {
+    flex: 1;
+    background: #08111c;
+    border: 1px solid #162638;
+    color: #7b94ad;
+    font-size: 10px;
+    font-weight: 800;
+    padding: 4px 0;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.auto-row {
+    display: flex;
+    gap: 8px;
+}
+
+.auto-field {
+    flex: 1;
+    background: #070f1a;
+    padding: 6px;
+    border-radius: 6px;
+    border: 1px solid #162436;
+}
+
+.main-action-btn {
+    width: 100%;
+    padding: 11px;
+    border-radius: 8px;
+    border: none;
+    font-size: 13px;
+    font-weight: 900;
+    cursor: pointer;
+}
+
+.btn-start {
+    background: #00e701;
+    color: #013301;
+    box-shadow: 0 0 18px rgba(0, 231, 1, 0.35);
+}
+
+.btn-cashout {
+    background: #f59e0b;
+    color: #382100;
+    box-shadow: 0 0 18px rgba(245, 158, 11, 0.45);
+}
+
+.btn-disabled {
+    background: #162638;
+    color: #42566d;
+    cursor: not-allowed;
+}
+
+/* History */
+.history-container {
+    background: #070e17;
+    border-radius: 10px;
+    border: 1px solid #142233;
+    padding: 8px;
+}
+
+.history-title {
+    font-size: 9px;
+    font-weight: 800;
+    color: #4b6279;
+    letter-spacing: 1px;
+    margin-bottom: 6px;
+}
+
+.history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 90px;
+    overflow-y: auto;
+}
+
+.history-item {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    font-weight: 800;
+    padding: 4px 8px;
+    background: #0b1522;
+    border-radius: 4px;
+}
+
+.history-item.win {
+    border-left: 3px solid #00e701;
+    color: #00e701;
+}
+
+.history-item.loss {
+    border-left: 3px solid #ef4444;
+    color: #ef4444;
+}
+
+/* Provably Fair Modal */
+.modal-backdrop {
+    position: fixed;
+    top: 0; 
+    left: 0; 
+    width: 100%; 
+    height: 100%;
+    background: rgba(0,0,0,0.8);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 99999;
+}
+
+.modal-content {
+    background: #0b1420;
+    border: 1px solid #00e7ff;
+    width: 90%;
+    max-width: 380px;
+    border-radius: 12px;
+    padding: 16px;
+    box-shadow: 0 0 40px rgba(0, 231, 255, 0.3);
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.modal-header h3 {
+    font-size: 14px;
+    color: #00e7ff;
+}
+
+.modal-close {
+    background: transparent;
+    border: none;
+    color: #8fa7be;
+    font-size: 16px;
+    cursor: pointer;
+}
+
+.modal-body {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.modal-body input {
+    border: 1px solid #1c2e42;
+    border-radius: 4px;
+}
+
+.modal-info {
+    font-size: 9.5px;
+    color: #6a829a;
+    line-height: 1.4;
+    margin-top: 4px;
 }
