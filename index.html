@@ -6,13 +6,19 @@
     <title>Stake VIP Slots</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/7.2.4/pixi.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
 </head>
 <body>
 
     <div class="game-container">
-        <div class="header-title">STAKE VIP SLOTS</div>
+        <div class="header-title">⚡ STAKE VIP SLOTS ⚡</div>
         
-        <div id="canvas-container"></div>
+        <div id="canvas-container">
+            <div id="win-overlay" class="win-overlay">
+                <div class="win-title" id="win-title">BIG WIN!</div>
+                <div class="win-payout" id="win-overlay-amount">+$50.00</div>
+            </div>
+        </div>
 
         <div class="controls-panel">
             <div class="stat-box">
