@@ -1,5 +1,6 @@
 // ---------------- GLOBAL CONFIG ----------------
 const TOTAL_STEPS = 13;
+const BACKEND_URL = "https://stake-advanced-game.onrender.com";
 const MAX_BET_LIMIT = 10000;
 
 const CONFIGS = {
@@ -563,10 +564,9 @@ function restoreActiveGameIfAny() {
     } catch (e) {}
     return false;
 }
-
-function startNewGame() {
+async function startNewGame() {
     if (balance < currentBet) {
-        alert("Insufficient balance! Click Balance to Top-Up.");
+        alert("Insufficient balance! Click Balance to add funds.");
         stopAutoPlay();
         return;
     }
@@ -574,9 +574,28 @@ function startNewGame() {
     balance -= currentBet;
     currentStep = 0;
     gameState = 'PLAYING';
-    generateProvablyFairSeed();
-    saveState();
 
+    try {
+        const response = await fetch(`${BACKEND_URL}/api/create-round`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                difficulty: currentDiff,
+                betAmount: currentBet
+            })
+        });
+        const data = await response.json();
+        if (data.success) {
+            bridgePattern = data.bridgePattern;
+            currentRoundHash = data.roundHash;
+            serverSeed = data.serverSeed;
+        }
+    } catch (err) {
+        console.warn("Backend offline or waking up, using fallback:", err);
+        generateProvablyFairSeed();
+    }
+
+    saveState();
     balanceDisplay.textContent = `$${balance.toFixed(2)}`;
     build3DBridge();
     updateHud();
@@ -590,10 +609,13 @@ function startNewGame() {
 }
 
 function makeStep(chosenIndex) {
-    if (gameState !== 'PLAYING') return;
-    gameState = 'JUMPING';
-
     const targetPanel = panels3D[currentStep][chosenIndex];
+
+  
+
+   
+   
+
     const isSafe = (chosenIndex === bridgePattern[currentStep]);
 
     gsap.to(characterMesh.position, {
