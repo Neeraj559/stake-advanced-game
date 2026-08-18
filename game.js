@@ -1,13 +1,44 @@
-const TOTAL_STEPS = 8;
-const MULTIPLIERS = [1.96, 3.84, 7.52, 14.75, 28.90, 56.65, 111.00, 218.00];
+const TOTAL_STEPS = 13;
 
+const CONFIGS = {
+    easy: {
+        panels: 3,
+        safeCount: 2,
+        multipliers: [1.18, 1.42, 1.75, 2.20, 2.85, 3.80, 5.20, 7.40, 9.80, 12.50, 15.00, 18.50, 25.00],
+        offsets: [-1.15, 0, 1.15],
+        labels: ['LEFT', 'CENTER', 'RIGHT']
+    },
+    medium: {
+        panels: 2,
+        safeCount: 1,
+        multipliers: [1.96, 3.84, 7.52, 14.75, 28.90, 56.65, 111.00, 217.50, 426.00, 835.00, 1636.00, 3580.00, 7850.00],
+        offsets: [-0.95, 0.95],
+        labels: ['LEFT', 'RIGHT']
+    },
+    hard: {
+        panels: 3,
+        safeCount: 1,
+        multipliers: [2.94, 8.64, 25.40, 74.70, 219.60, 645.70, 1898.00, 5580.00, 16400.00, 48200.00, 141700.00, 442000.00, 1510000.00],
+        offsets: [-1.15, 0, 1.15],
+        labels: ['LEFT', 'CENTER', 'RIGHT']
+    },
+    extreme: {
+        panels: 4,
+        safeCount: 1,
+        multipliers: [1.35, 1.95, 3.10, 5.20, 8.90, 15.50, 28.00, 52.00, 105.00, 240.00, 580.00, 1550.00, 5000.00],
+        offsets: [-1.4, -0.47, 0.47, 1.4],
+        labels: ['P1', 'P2', 'P3', 'P4']
+    }
+};
+
+let currentDiff = 'medium';
 let balance = 1000;
 let betAmount = 10;
 let currentStep = 0;
-let safeSides = []; // 0 = Left, 1 = Right
-let gameState = 'IDLE'; // IDLE, PLAYING, JUMPING, ENDED
+let safePanelsMatrix = [];
+let gameState = 'IDLE';
 
-// Web Audio Synth
+// Web Audio Synth FX
 const AudioCtx = window.AudioContext || window.webkitAudioContext;
 let audio = null;
 
@@ -22,124 +53,310 @@ function playSound(type) {
 
     if (type === 'jump') {
         osc.type = 'sine';
-        osc.frequency.setValueAtTime(280, now);
-        osc.frequency.exponentialRampToValueAtTime(560, now + 0.15);
+        osc.frequency.setValueAtTime(240, now);
+        osc.frequency.exponentialRampToValueAtTime(540, now + 0.2);
         gain.gain.setValueAtTime(0.3, now);
-        gain.gain.linearRampToValueAtTime(0.01, now + 0.15);
+        gain.gain.linearRampToValueAtTime(0.01, now + 0.2);
         osc.start(now);
-        osc.stop(now + 0.15);
+        osc.stop(now + 0.2);
     } else if (type === 'land') {
         osc.type = 'triangle';
-        osc.frequency.setValueAtTime(450, now);
-        gain.gain.setValueAtTime(0.3, now);
-        gain.gain.linearRampToValueAtTime(0.01, now + 0.1);
+        osc.frequency.setValueAtTime(460, now);
+        gain.gain.setValueAtTime(0.35, now);
+        gain.gain.linearRampToValueAtTime(0.01, now + 0.12);
         osc.start(now);
-        osc.stop(now + 0.1);
+        osc.stop(now + 0.12);
     } else if (type === 'shatter') {
         osc.type = 'sawtooth';
         osc.frequency.setValueAtTime(160, now);
         osc.frequency.exponentialRampToValueAtTime(30, now + 0.5);
-        gain.gain.setValueAtTime(0.4, now);
+        gain.gain.setValueAtTime(0.5, now);
         gain.gain.linearRampToValueAtTime(0.01, now + 0.5);
         osc.start(now);
         osc.stop(now + 0.5);
+    } else if (type === 'cashout') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(520, now);
+        osc.frequency.linearRampToValueAtTime(1040, now + 0.35);
+        gain.gain.setValueAtTime(0.4, now);
+        gain.gain.linearRampToValueAtTime(0.01, now + 0.35);
+        osc.start(now);
+        osc.stop(now + 0.35);
     }
 }
 
-// ---------------- THREE.JS 3D SCENE SETUP ----------------
+// ---------------- THREE.JS 3D MOUNTAIN ABYSS SCENE ----------------
 const viewport = document.getElementById('viewport');
 const scene = new THREE.Scene();
-scene.fog = new THREE.FogExp2(0x05090e, 0.04);
+scene.fog = new THREE.FogExp2(0x040810, 0.022);
 
-const camera = new THREE.PerspectiveCamera(45, viewport.clientWidth / viewport.clientHeight, 0.1, 1000);
-camera.position.set(0, 6, 8);
-camera.lookAt(0, 0, -4);
+const camera = new THREE.PerspectiveCamera(52, viewport.clientWidth / viewport.clientHeight, 0.1, 1000);
+const INITIAL_CAM_POS = { x: 0, y: 3.4, z: 4.8 };
+camera.position.set(INITIAL_CAM_POS.x, INITIAL_CAM_POS.y, INITIAL_CAM_POS.z);
+camera.lookAt(0, 1.0, -4);
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
 renderer.setSize(viewport.clientWidth, viewport.clientHeight);
-renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 viewport.appendChild(renderer.domElement);
 
+// Mountain Cliffs & Abyss Walls
+function buildMountainValley() {
+    const rockMat = new THREE.MeshStandardMaterial({ color: 0x08101a, roughness: 0.9, metalness: 0.1, flatShading: true });
+    
+    // Left Mountain Wall
+    const leftMtnGeom = new THREE.ConeGeometry(9, 45, 6);
+    const leftMtn = new THREE.Mesh(leftMtnGeom, rockMat);
+    leftMtn.position.set(-11, 2, -22);
+    leftMtn.rotation.y = 0.4;
+    scene.add(leftMtn);
+
+    // Right Mountain Wall
+    const rightMtnGeom = new THREE.ConeGeometry(10, 50, 7);
+    const rightMtn = new THREE.Mesh(rightMtnGeom, rockMat);
+    rightMtn.position.set(12, 4, -25);
+    rightMtn.rotation.y = -0.6;
+    scene.add(rightMtn);
+
+    // Deep Fog Layer Plane in Abyss
+    const fogGeom = new THREE.PlaneGeometry(60, 100);
+    const fogMat = new THREE.MeshBasicMaterial({ color: 0x03070d, transparent: true, opacity: 0.85 });
+    const fogPlane = new THREE.Mesh(fogGeom, fogMat);
+    fogPlane.rotation.x = -Math.PI / 2;
+    fogPlane.position.set(0, -6, -20);
+    scene.add(fogPlane);
+}
+buildMountainValley();
+
 // Lighting
-const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-scene.add(ambientLight);
+scene.add(new THREE.AmbientLight(0xffffff, 0.65));
+const moonLight = new THREE.DirectionalLight(0x00d2ff, 1.2);
+moonLight.position.set(5, 15, 10);
+scene.add(moonLight);
 
-const dirLight = new THREE.DirectionalLight(0x00d2ff, 1.2);
-dirLight.position.set(5, 12, 10);
-scene.add(dirLight);
+// Suspension Rails
+function createBridgeStructure() {
+    const railMat = new THREE.MeshStandardMaterial({ color: 0x162436, metalness: 0.85, roughness: 0.3 });
+    const beamGeom = new THREE.CylinderGeometry(0.05, 0.05, 52, 16);
 
-// Glass Materials
-const glassMaterial = new THREE.MeshPhysicalMaterial({
-    color: 0x00d2ff,
-    transparent: true,
-    opacity: 0.45,
-    roughness: 0.1,
-    metalness: 0.1,
-    transmission: 0.6,
-    ior: 1.5
-});
+    const leftRail = new THREE.Mesh(beamGeom, railMat);
+    leftRail.rotation.x = Math.PI / 2;
+    leftRail.position.set(-1.8, -0.1, -22);
+    scene.add(leftRail);
 
+    const rightRail = new THREE.Mesh(beamGeom, railMat);
+    rightRail.rotation.x = Math.PI / 2;
+    rightRail.position.set(1.8, -0.1, -22);
+    scene.add(rightRail);
+}
+createBridgeStructure();
+
+const STEP_DISTANCE = 3.2;
 const bridgeSteps = [];
-const STEP_DISTANCE = 2.8;
+const shardParticles = [];
 
-// Build Bridge Structure
-function build3DBridge() {
-    bridgeSteps.forEach(step => {
-        scene.remove(step.left);
-        scene.remove(step.right);
+function createGlassTile(x, z, width = 1.1) {
+    const group = new THREE.Group();
+    const glassMat = new THREE.MeshPhysicalMaterial({
+        color: 0x00d2ff,
+        transparent: true,
+        opacity: 0.35,
+        roughness: 0.1,
+        metalness: 0.15,
+        transmission: 0.82,
+        ior: 1.52
     });
+    const paneGeom = new THREE.BoxGeometry(width, 0.08, 1.7);
+    const pane = new THREE.Mesh(paneGeom, glassMat);
+    group.add(pane);
+
+    const frameGeom = new THREE.EdgesGeometry(paneGeom);
+    const frameMat = new THREE.LineBasicMaterial({ color: 0x00e7ff, linewidth: 2 });
+    const frame = new THREE.LineSegments(frameGeom, frameMat);
+    group.add(frame);
+
+    group.position.set(x, 0, z);
+    group.pane = pane;
+    group.frame = frame;
+    return group;
+}
+
+function build3DBridge() {
+    bridgeSteps.forEach(s => s.panels.forEach(p => scene.remove(p)));
     bridgeSteps.length = 0;
 
+    const conf = CONFIGS[currentDiff];
+    const tileWidth = conf.panels === 4 ? 0.72 : conf.panels === 3 ? 0.95 : 1.25;
+
     for (let i = 0; i < TOTAL_STEPS; i++) {
-        const z = -i * STEP_DISTANCE - 2;
-        const geom = new THREE.BoxGeometry(1.2, 0.08, 1.6);
+        const z = -i * STEP_DISTANCE - 1.8;
+        const panels = [];
 
-        const leftPane = new THREE.Mesh(geom, glassMaterial.clone());
-        leftPane.position.set(-1.0, 0, z);
-        scene.add(leftPane);
+        conf.offsets.forEach((x, panelIdx) => {
+            const tile = createGlassTile(x, z, tileWidth);
+            tile.userData = { stepIdx: i, panelIdx: panelIdx };
+            scene.add(tile);
+            panels.push(tile);
+        });
 
-        const rightPane = new THREE.Mesh(geom, glassMaterial.clone());
-        rightPane.position.set(1.0, 0, z);
-        scene.add(rightPane);
-
-        bridgeSteps.push({ left: leftPane, right: rightPane, z });
+        bridgeSteps.push({ panels, z });
     }
 }
 build3DBridge();
 
-// Player Token (Glowing Neon Sphere)
-const playerGeom = new THREE.SphereGeometry(0.32, 32, 32);
-const playerMat = new THREE.MeshBasicMaterial({ color: 0x00ff88 });
-const player = new THREE.Mesh(playerGeom, playerMat);
-player.position.set(0, 0.35, 0.5);
-scene.add(player);
+// 3D Human Avatar (Low-Poly Stylized Humanoid)
+const humanGroup = new THREE.Group();
+
+const skinMat = new THREE.MeshLambertMaterial({ color: 0xffcc99 });
+const suitMat = new THREE.MeshLambertMaterial({ color: 0x00ff88 });
+const darkMat = new THREE.MeshLambertMaterial({ color: 0x111c26 });
+
+// Head
+const headGeom = new THREE.BoxGeometry(0.22, 0.24, 0.22);
+const head = new THREE.Mesh(headGeom, skinMat);
+head.position.y = 0.95;
+humanGroup.add(head);
+
+// Torso (Tracksuit Jacket)
+const torsoGeom = new THREE.BoxGeometry(0.34, 0.44, 0.22);
+const torso = new THREE.Mesh(torsoGeom, suitMat);
+torso.position.y = 0.62;
+humanGroup.add(torso);
+
+// Legs
+const legGeom = new THREE.BoxGeometry(0.12, 0.4, 0.14);
+const leftLeg = new THREE.Mesh(legGeom, darkMat);
+leftLeg.position.set(-0.09, 0.2, 0);
+humanGroup.add(leftLeg);
+
+const rightLeg = new THREE.Mesh(legGeom, darkMat);
+rightLeg.position.set(0.09, 0.2, 0);
+humanGroup.add(rightLeg);
+
+humanGroup.position.set(0, 0.05, 0.8);
+scene.add(humanGroup);
+
+// Glass Shatter Shards
+function triggerGlassShatter(x, y, z) {
+    const shardGeom = new THREE.TetrahedronGeometry(0.12, 0);
+    const shardMat = new THREE.MeshBasicMaterial({ color: 0x00e7ff, wireframe: true });
+
+    for (let i = 0; i < 24; i++) {
+        const shard = new THREE.Mesh(shardGeom, shardMat);
+        shard.position.set(x + (Math.random() - 0.5) * 0.7, y, z + (Math.random() - 0.5) * 0.7);
+        shard.velocity = new THREE.Vector3((Math.random() - 0.5) * 0.14, Math.random() * 0.08 - 0.04, (Math.random() - 0.5) * 0.14);
+        scene.add(shard);
+        shardParticles.push(shard);
+    }
+}
+
+// Raycasting (Direct Click on 3D Glass)
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+
+viewport.addEventListener('click', (e) => {
+    if (gameState !== 'PLAYING') return;
+    const rect = viewport.getBoundingClientRect();
+    mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+    raycaster.setFromCamera(mouse, camera);
+    const currentStepPanels = bridgeSteps[currentStep].panels.map(p => p.pane);
+    const intersects = raycaster.intersectObjects(currentStepPanels);
+
+    if (intersects.length > 0) {
+        const parentGroup = intersects[0].object.parent;
+        makeStep(parentGroup.userData.panelIdx);
+    }
+});
 
 // Render Loop
 function animate() {
     requestAnimationFrame(animate);
+
+    // Human Breathing Sway
+    if (gameState === 'PLAYING' || gameState === 'IDLE') {
+        humanGroup.position.y = 0.05 + Math.sin(Date.now() * 0.005) * 0.02;
+    }
+
+    // Shard Physics in Abyss
+    for (let i = shardParticles.length - 1; i >= 0; i--) {
+        const s = shardParticles[i];
+        s.position.add(s.velocity);
+        s.velocity.y -= 0.008;
+        s.rotation.x += 0.06;
+
+        if (s.position.y < -20) {
+            scene.remove(s);
+            shardParticles.splice(i, 1);
+        }
+    }
+
     renderer.render(scene, camera);
 }
 animate();
 
-// ---------------- GAME LOGIC ----------------
+// ---------------- GAME CONTROLS & LOGIC ----------------
 const balanceDisplay = document.getElementById('balance-display');
 const betInput = document.getElementById('bet-input');
 const mainBtn = document.getElementById('main-btn');
-const btnLeft = document.getElementById('btn-left');
-const btnRight = document.getElementById('btn-right');
 const btnHalf = document.getElementById('btn-half');
 const btnDouble = document.getElementById('btn-double');
+const btnMax = document.getElementById('btn-max');
+const stepHud = document.getElementById('step-hud');
+const decisionButtons = document.getElementById('decision-buttons');
+const diffButtons = document.querySelectorAll('.diff-btn');
+const chipButtons = document.querySelectorAll('.chip-btn');
 
-btnHalf.addEventListener('click', () => {
-    betInput.value = Math.max(1, Math.floor(parseFloat(betInput.value) / 2));
+function renderDecisionButtons() {
+    decisionButtons.innerHTML = '';
+    const conf = CONFIGS[currentDiff];
+    conf.labels.forEach((label, idx) => {
+        const btn = document.createElement('button');
+        btn.className = 'choice-btn';
+        btn.textContent = label;
+        btn.disabled = true;
+        btn.addEventListener('click', () => makeStep(idx));
+        decisionButtons.appendChild(btn);
+    });
+}
+renderDecisionButtons();
+
+diffButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+        if (gameState === 'PLAYING') return;
+        diffButtons.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentDiff = btn.dataset.diff;
+        build3DBridge();
+        renderDecisionButtons();
+        updateHud();
+    });
 });
-btnDouble.addEventListener('click', () => {
-    betInput.value = Math.min(balance, Math.floor(parseFloat(betInput.value) * 2));
+
+chipButtons.forEach(chip => {
+    chip.addEventListener('click', () => {
+        if (gameState === 'PLAYING') return;
+        betInput.value = chip.dataset.amt;
+    });
 });
+
+btnHalf.addEventListener('click', () => betInput.value = Math.max(1, Math.floor(parseFloat(betInput.value) / 2)));
+btnDouble.addEventListener('click', () => betInput.value = Math.min(balance, Math.floor(parseFloat(betInput.value) * 2)));
+btnMax.addEventListener('click', () => betInput.value = balance);
 
 mainBtn.addEventListener('click', handleMainAction);
-btnLeft.addEventListener('click', () => makeStep(0));
-btnRight.addEventListener('click', () => makeStep(1));
+
+function formatMultiplier(mult) {
+    if (mult >= 1000000) return `${(mult / 1000000).toFixed(2)}M`;
+    if (mult >= 1000) return `${(mult / 1000).toFixed(1)}k`;
+    return mult.toFixed(2);
+}
+
+function updateHud() {
+    const mult = CONFIGS[currentDiff].multipliers[currentStep];
+    stepHud.textContent = `${currentDiff.toUpperCase()} • STEP ${currentStep + 1} / ${TOTAL_STEPS} • ${formatMultiplier(mult)}x`;
+}
 
 function handleMainAction() {
     if (gameState === 'IDLE' || gameState === 'ENDED') {
@@ -158,101 +375,133 @@ function startNewGame() {
     gameState = 'PLAYING';
     currentStep = 0;
     betInput.disabled = true;
+    diffButtons.forEach(b => b.disabled = true);
 
-    safeSides = [];
+    const conf = CONFIGS[currentDiff];
+    safePanelsMatrix = [];
+
     for (let i = 0; i < TOTAL_STEPS; i++) {
-        safeSides.push(Math.random() < 0.5 ? 0 : 1);
+        const indices = Array.from({ length: conf.panels }, (_, k) => k);
+        const shuffled = indices.sort(() => 0.5 - Math.random());
+        safePanelsMatrix.push(shuffled.slice(0, conf.safeCount));
     }
 
     build3DBridge();
+    updateHud();
 
-    // Reset Player Position & Camera
-    gsap.to(player.position, { x: 0, y: 0.35, z: 0.5, duration: 0.4 });
-    gsap.to(camera.position, { x: 0, y: 6, z: 8, duration: 0.4 });
+    // Reset Human & Camera
+    gsap.to(humanGroup.position, { x: 0, y: 0.05, z: 0.8, duration: 0.4 });
+    gsap.to(humanGroup.rotation, { x: 0, y: 0, z: 0, duration: 0.4 });
+    gsap.to(camera.position, { x: INITIAL_CAM_POS.x, y: INITIAL_CAM_POS.y, z: INITIAL_CAM_POS.z, duration: 0.4 });
 
-    btnLeft.disabled = false;
-    btnRight.disabled = false;
+    highlightCurrentStep();
+    enableChoiceButtons(true);
     mainBtn.textContent = 'CHOOSE A PANEL';
     mainBtn.className = 'main-action-btn btn-disabled';
 }
 
-function makeStep(sideChosen) {
+function enableChoiceButtons(enable) {
+    Array.from(decisionButtons.children).forEach(btn => btn.disabled = !enable);
+}
+
+function highlightCurrentStep() {
+    if (currentStep >= TOTAL_STEPS) return;
+    const step = bridgeSteps[currentStep];
+    step.panels.forEach(p => p.frame.material.color.setHex(0x00ff88));
+}
+
+function makeStep(chosenIndex) {
     if (gameState !== 'PLAYING') return;
     gameState = 'JUMPING';
-    btnLeft.disabled = true;
-    btnRight.disabled = true;
+    enableChoiceButtons(false);
 
-    const targetX = sideChosen === 0 ? -1.0 : 1.0;
+    const conf = CONFIGS[currentDiff];
+    const targetX = conf.offsets[chosenIndex];
     const targetZ = bridgeSteps[currentStep].z;
-    const isSafe = safeSides[currentStep] === sideChosen;
+    const isSafe = safePanelsMatrix[currentStep].includes(chosenIndex);
 
     playSound('jump');
 
-    // Smooth Jump Arc using GSAP
+    // Human Realistic Jump Arc
     gsap.timeline()
-        .to(player.position, {
+        .to(humanGroup.position, {
             x: targetX,
             z: targetZ,
             duration: 0.45,
             ease: "power1.inOut"
         })
-        .to(player.position, {
+        .to(humanGroup.position, {
             y: 1.8,
-            duration: 0.22,
+            duration: 0.225,
             yoyo: true,
             repeat: 1,
             ease: "power2.out"
         }, 0)
         .call(() => {
-            // Camera follow forward
-            gsap.to(camera.position, { z: targetZ + 7.5, duration: 0.5 });
-            gsap.to(camera.lookAt, { z: targetZ - 4, duration: 0.5 });
+            gsap.to(camera.position, { z: targetZ + 5.2, y: 3.0, duration: 0.45 });
 
             if (isSafe) {
                 playSound('land');
-                const pane = sideChosen === 0 ? bridgeSteps[currentStep].left : bridgeSteps[currentStep].right;
-                pane.material.color.setHex(0x00ff88);
+                const chosenGroup = bridgeSteps[currentStep].panels[chosenIndex];
+                chosenGroup.pane.material.color.setHex(0x00ff88);
+                chosenGroup.frame.material.color.setHex(0x00ff88);
+
+                // Auto-Shatter Fake Panels on this step after safe landing
+                setTimeout(() => {
+                    bridgeSteps[currentStep].panels.forEach((p, idx) => {
+                        if (!safePanelsMatrix[currentStep].includes(idx)) {
+                            triggerGlassShatter(conf.offsets[idx], 0, targetZ);
+                            scene.remove(p);
+                        }
+                    });
+                }, 200);
 
                 currentStep++;
-                const mult = MULTIPLIERS[currentStep - 1];
+                const mult = conf.multipliers[currentStep - 1];
                 const winAmount = betAmount * mult;
 
                 if (currentStep === TOTAL_STEPS) {
+                    stepHud.textContent = `COMPLETED! • ${formatMultiplier(mult)}x`;
                     cashOut();
                 } else {
+                    updateHud();
+                    highlightCurrentStep();
                     gameState = 'PLAYING';
-                    btnLeft.disabled = false;
-                    btnRight.disabled = false;
-                    mainBtn.textContent = `CASHOUT $${winAmount.toFixed(2)} (${mult}x)`;
+                    enableChoiceButtons(true);
+                    mainBtn.textContent = `CASHOUT $${winAmount.toFixed(2)} (${formatMultiplier(mult)}x)`;
                     mainBtn.className = 'main-action-btn btn-cashout';
                 }
             } else {
-                // Shatter pane and drop player
+                // Trap Fall: Human falls into Abyss
                 playSound('shatter');
-                const brokenPane = sideChosen === 0 ? bridgeSteps[currentStep].left : bridgeSteps[currentStep].right;
-                gsap.to(brokenPane.position, { y: -15, duration: 1.2, ease: "power2.in" });
-                gsap.to(player.position, { y: -15, duration: 1.2, ease: "power2.in" });
+                const brokenGroup = bridgeSteps[currentStep].panels[chosenIndex];
+                triggerGlassShatter(targetX, 0, targetZ);
+                scene.remove(brokenGroup);
+
+                gsap.to(humanGroup.position, { y: -22, duration: 1.3, ease: "power2.in" });
+                gsap.to(humanGroup.rotation, { x: 3, z: 2, duration: 1.3 });
                 endGame(false);
             }
         });
 }
 
 function cashOut() {
-    const finalMult = MULTIPLIERS[currentStep - 1];
+    const finalMult = CONFIGS[currentDiff].multipliers[currentStep - 1];
     const winAmount = betAmount * finalMult;
     balance += winAmount;
     balanceDisplay.textContent = `$${balance.toFixed(2)}`;
 
-    confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } });
+    playSound('cashout');
+    confetti({ particleCount: 100, spread: 80, origin: { y: 0.6 } });
     endGame(true);
 }
 
 function endGame(won) {
     gameState = 'ENDED';
     betInput.disabled = false;
-    btnLeft.disabled = true;
-    btnRight.disabled = true;
+    diffButtons.forEach(b => b.disabled = false);
+    enableChoiceButtons(false);
 
-    mainBtn.textContent = won ? 'SURVIVED! PLAY AGAIN' : 'FELL DOWN! TRY AGAIN';
+    mainBtn.textContent = won ? 'SURVIVED 13 STEPS! PLAY AGAIN' : 'FELL INTO ABYSS! TRY AGAIN';
     mainBtn.className = 'main-action-btn btn-start';
 }

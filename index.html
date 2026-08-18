@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-select=no">
-    <title>3D Glass Bridge - Stake Engine</title>
+    <title>3D Glass Bridge - Mountain Abyss</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
@@ -21,13 +21,19 @@
         </div>
 
         <div class="viewport-3d" id="viewport">
-            <div class="decision-overlay">
-                <button class="choice-btn" id="btn-left" disabled>LEFT ◀</button>
-                <button class="choice-btn" id="btn-right" disabled>RIGHT ▶</button>
-            </div>
+            <div class="step-hud-badge" id="step-hud">MEDIUM • STEP 1 / 13 • 1.96x</div>
+            <div class="decision-overlay" id="decision-buttons"></div>
         </div>
 
         <div class="control-dashboard">
+            <span class="lbl">DIFFICULTY LEVEL</span>
+            <div class="difficulty-pill-box">
+                <button class="diff-btn" data-diff="easy">EASY</button>
+                <button class="diff-btn active" data-diff="medium">MEDIUM</button>
+                <button class="diff-btn" data-diff="hard">HARD</button>
+                <button class="diff-btn" data-diff="extreme">EXTREME</button>
+            </div>
+
             <span class="lbl">BET AMOUNT ($)</span>
             <div class="input-row">
                 <div class="input-shell">
@@ -35,6 +41,15 @@
                 </div>
                 <button class="btn-modifier" id="btn-half">½</button>
                 <button class="btn-modifier" id="btn-double">2×</button>
+                <button class="btn-modifier" id="btn-max">MAX</button>
+            </div>
+
+            <div class="quick-chips-row">
+                <button class="chip-btn" data-amt="5">$5</button>
+                <button class="chip-btn" data-amt="10">$10</button>
+                <button class="chip-btn" data-amt="25">$25</button>
+                <button class="chip-btn" data-amt="50">$50</button>
+                <button class="chip-btn" data-amt="100">$100</button>
             </div>
 
             <button class="main-action-btn btn-start" id="main-btn">START CROSSING</button>
