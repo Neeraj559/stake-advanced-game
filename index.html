@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stake Custom Slot Game</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/7.3.2/pixi.min.js"></script>
+</head>
+<body>
+    <div id="game-wrapper">
+        <div id="game-canvas-container"></div>
+        <div id="ui-panel">
+            <div class="stat-box">Balance: $<span id="balance-val">1000.00</span></div>
+            <div class="stat-box">Bet: $<span id="bet-val">10.00</span></div>
+            <div class="stat-box">Last Win: $<span id="win-val">0.00</span></div>
+            <button id="spin-btn">SPIN</button>
+        </div>
+    </div>
+    <script src="game.js"></script>
+</body>
+</html>
