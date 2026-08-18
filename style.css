@@ -2,223 +2,217 @@
     box-sizing: border-box;
     margin: 0;
     padding: 0;
-    font-family: 'Segoe UI', Roboto, -apple-system, sans-serif;
+    font-family: 'Montserrat', 'Segoe UI', Roboto, sans-serif;
     user-select: none;
+    -webkit-tap-highlight-color: transparent;
 }
 
 body {
-    background: radial-gradient(circle at 50% 30%, #1a0b2e 0%, #06040a 100%);
+    background: #030108;
     min-height: 100vh;
     display: flex;
     justify-content: center;
     align-items: center;
-    color: #fff;
     overflow: hidden;
+    color: #fff;
 }
 
-.game-container {
-    background: linear-gradient(180deg, #110d21 0%, #080612 100%);
-    border-radius: 20px;
-    padding: 20px;
-    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.9), 0 0 35px rgba(226, 36, 36, 0.2);
-    border: 2px solid #2a1b4d;
+.stage-wrapper {
+    width: 100%;
+    max-width: 440px;
+    height: 100vh;
+    max-height: 880px;
+    background: radial-gradient(circle at 50% 15%, #2a0845 0%, #0c0714 60%, #030108 100%);
     display: flex;
     flex-direction: column;
+    justify-content: space-between;
     align-items: center;
-    gap: 16px;
     position: relative;
+    padding: 10px;
+    border: 2px solid #3d1b6d;
+    box-shadow: 0 0 60px rgba(168, 85, 247, 0.25);
 }
 
-.header-bar {
+.top-header {
     text-align: center;
+    margin-top: 4px;
 }
 
 .game-title {
-    font-size: 26px;
+    font-size: 22px;
     font-weight: 900;
     letter-spacing: 2px;
-    background: linear-gradient(135deg, #ff2a2a, #3877ff);
+    background: linear-gradient(180deg, #ffe066 0%, #ff8800 50%, #d46200 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
-    text-shadow: 0 0 25px rgba(255, 42, 42, 0.5);
+    filter: drop-shadow(0 2px 8px rgba(255, 170, 0, 0.7));
 }
 
-.sub-badge {
-    font-size: 11px;
-    font-weight: 800;
-    color: #ffd700;
-    letter-spacing: 1.5px;
-}
-
-.main-stage {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-}
-
-#canvas-container {
-    position: relative;
-    border-radius: 12px;
-    overflow: hidden;
-    background: #090614;
-    border: 3px solid #3d236b;
-    box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.9), 0 0 20px rgba(78, 38, 148, 0.4);
-}
-
-.multiplier-box {
-    background: #191230;
-    border: 2px solid #ffaa00;
-    border-radius: 12px;
-    padding: 12px 14px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 4px;
-    box-shadow: 0 0 15px rgba(255, 170, 0, 0.3);
-}
-
-.mult-label {
+.sub-header {
     font-size: 10px;
     font-weight: 800;
-    color: #ffcc00;
-    text-align: center;
+    color: #00d2ff;
+    letter-spacing: 1.5px;
+    text-shadow: 0 0 10px rgba(0, 210, 255, 0.8);
 }
 
-.mult-val {
-    font-size: 24px;
-    font-weight: 900;
-    color: #ffffff;
-    text-shadow: 0 0 10px #ffaa00;
-}
-
-.spiderman-widget {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-    width: 90px;
-}
-
-.spidey-avatar {
-    font-size: 55px;
-    filter: drop-shadow(0 0 15px rgba(255, 42, 42, 0.8));
-    animation: floating 2.5s ease-in-out infinite alternate;
-}
-
-@keyframes floating {
-    0% { transform: translateY(0px) rotate(0deg); }
-    100% { transform: translateY(-8px) rotate(3deg); }
-}
-
-.spidey-bubble {
-    background: #e22424;
-    color: #fff;
-    font-size: 9px;
-    font-weight: 900;
-    padding: 4px 6px;
-    border-radius: 6px;
-    text-align: center;
-    border: 1px solid #ff6666;
-}
-
-.win-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
+.arena-container {
+    position: relative;
     width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.8);
     display: flex;
-    flex-direction: column;
     justify-content: center;
     align-items: center;
+    margin: auto 0;
+}
+
+#game-canvas {
+    border-radius: 14px;
+    border: 3px solid #ffd700;
+    box-shadow: 0 0 30px rgba(255, 215, 0, 0.35), inset 0 0 40px rgba(0, 0, 0, 0.95);
+    background: rgba(5, 2, 15, 0.85);
+}
+
+/* Side Indicators */
+.hud-card {
+    position: absolute;
+    background: linear-gradient(180deg, #1f0d3d 0%, #090314 100%);
+    border: 1.5px solid #ffd700;
+    border-radius: 8px;
+    padding: 4px 8px;
+    text-align: center;
+    box-shadow: 0 0 12px rgba(255, 215, 0, 0.3);
     z-index: 10;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.3s ease;
 }
 
-.win-overlay.active {
-    opacity: 1;
-    pointer-events: all;
+.mult-hud {
+    left: 4px;
+    top: -38px;
 }
 
-.win-title {
-    font-size: 42px;
+.spidey-hud {
+    right: 4px;
+    top: -45px;
+    border-color: #ff2a55;
+    box-shadow: 0 0 15px rgba(255, 42, 85, 0.4);
+}
+
+.hud-label {
+    font-size: 8px;
+    font-weight: 900;
+    color: #ffdd80;
+    display: block;
+}
+
+.hud-val {
+    font-size: 16px;
+    font-weight: 900;
+    color: #fff;
+    text-shadow: 0 0 8px #ffd700;
+}
+
+.spidey-icon {
+    font-size: 32px;
+    filter: drop-shadow(0 0 10px #ff0044);
+    animation: webFloat 2.5s ease-in-out infinite alternate;
+}
+
+@keyframes webFloat {
+    0% { transform: translateY(0); }
+    100% { transform: translateY(-6px); }
+}
+
+.win-toast {
+    position: absolute;
+    top: 15px;
+    background: rgba(10, 0, 20, 0.92);
+    border: 2px solid #ffd700;
+    padding: 6px 18px;
+    border-radius: 20px;
+    font-size: 13px;
     font-weight: 900;
     color: #ffd700;
-    text-shadow: 0 0 25px #ff5500, 0 0 50px #ffea00;
+    opacity: 0;
+    transform: translateY(-10px);
+    transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    z-index: 20;
+    pointer-events: none;
+    box-shadow: 0 0 20px rgba(255, 215, 0, 0.5);
 }
 
-.win-payout {
-    font-size: 32px;
-    font-weight: 800;
-    color: #00e701;
-    text-shadow: 0 0 20px rgba(0, 231, 1, 0.8);
+.win-toast.active {
+    opacity: 1;
+    transform: translateY(0);
 }
 
-.controls-panel {
+.bottom-bar {
+    width: 100%;
+    background: linear-gradient(180deg, #130a24 0%, #080312 100%);
+    border: 1.5px solid #3d236b;
+    border-radius: 16px;
+    padding: 10px 14px;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    width: 100%;
-    background: #140e26;
-    padding: 12px 20px;
-    border-radius: 14px;
-    gap: 15px;
-    border: 1px solid #2a1b4d;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
 }
 
-.stat-box {
+.stat-group {
     display: flex;
-    flex-direction: column;
-    gap: 2px;
+    gap: 14px;
 }
 
-.stat-label {
-    font-size: 10px;
-    font-weight: 700;
-    color: #8f85b3;
-    text-transform: uppercase;
-}
-
-.stat-value {
-    font-size: 18px;
+.stat-item .lbl {
+    font-size: 9px;
     font-weight: 800;
+    color: #9d8db8;
+    text-transform: uppercase;
+    display: block;
+}
+
+.stat-item .val {
+    font-size: 15px;
+    font-weight: 900;
     color: #ffffff;
 }
 
-.stat-value.win {
-    color: #00e701;
+.win-box {
+    text-align: center;
+}
+
+.win-box .win-val {
+    font-size: 17px;
+    font-weight: 900;
+    color: #00ff88;
+    text-shadow: 0 0 10px rgba(0, 255, 136, 0.6);
 }
 
 .btn-spin {
-    background: linear-gradient(180deg, #ff2a2a 0%, #b30000 100%);
-    color: #ffffff;
-    font-size: 18px;
-    font-weight: 900;
-    border: none;
-    padding: 12px 38px;
-    border-radius: 10px;
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 30% 30%, #ffe600, #ff6600);
+    border: 3px solid #ffffff;
     cursor: pointer;
-    box-shadow: 0 5px 0 #700000, 0 0 25px rgba(255, 42, 42, 0.5);
-    transition: all 0.1s ease;
-    letter-spacing: 1px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    box-shadow: 0 0 20px rgba(255, 102, 0, 0.8);
+    transition: transform 0.1s ease;
 }
 
-.btn-spin:hover:not(:disabled) {
-    transform: translateY(-2px);
-    box-shadow: 0 7px 0 #700000, 0 0 35px rgba(255, 42, 42, 0.8);
-}
-
-.btn-spin:active:not(:disabled) {
-    transform: translateY(4px);
-    box-shadow: 0 1px 0 #700000;
+.btn-spin:active {
+    transform: scale(0.92);
 }
 
 .btn-spin:disabled {
-    background: #2b233d;
-    color: #635882;
+    background: #2d2042;
+    border-color: #554470;
     box-shadow: none;
     cursor: not-allowed;
+}
+
+.spin-icon {
+    font-size: 32px;
+    color: #2b0c00;
+    font-weight: 900;
 }

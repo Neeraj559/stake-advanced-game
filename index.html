@@ -2,59 +2,57 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Spider-Man: Web of Multipliers</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-select=no">
+    <title>Spider-Man: Gates of Power</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/7.2.4/pixi.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
 </head>
 <body>
 
-    <div class="game-container">
-        <div class="header-bar">
-            <div class="game-title">🕷️ SPIDER-MAN 1000 🕷️</div>
-            <div class="sub-badge">PAYS ANYWHERE • TUMBLE FEATURE</div>
+    <div class="stage-wrapper">
+        <div class="top-header">
+            <div class="game-title">SPIDER-MAN 1000</div>
+            <div class="sub-header">PAYS ANYWHERE • CLUSTER CASCADE</div>
         </div>
-        
-        <div class="main-stage">
-            <!-- Left Side Multiplier Accumulator -->
-            <div class="multiplier-box" id="multiplier-box">
-                <span class="mult-label">TOTAL MULTIPLIER</span>
-                <span class="mult-val" id="total-multiplier-val">1x</span>
+
+        <div class="arena-container">
+            <div class="hud-card mult-hud">
+                <span class="hud-label">MULTIPLIER</span>
+                <span class="hud-val" id="mult-display">1x</span>
             </div>
 
-            <!-- Canvas Container -->
-            <div id="canvas-container">
-                <div id="win-overlay" class="win-overlay">
-                    <div class="win-title" id="win-title">BIG WIN!</div>
-                    <div class="win-payout" id="win-overlay-amount">+$0.00</div>
+            <div class="hud-card spidey-hud">
+                <div class="spidey-icon">🕷️</div>
+            </div>
+
+            <div id="game-canvas"></div>
+
+            <div class="win-toast" id="win-toast">
+                TUMBLE WIN <span id="toast-amount">$0.00</span>
+            </div>
+        </div>
+
+        <div class="bottom-bar">
+            <div class="stat-group">
+                <div class="stat-item">
+                    <span class="lbl">Credit</span>
+                    <span class="val" id="balance-display">$1,000.00</span>
+                </div>
+                <div class="stat-item">
+                    <span class="lbl">Bet</span>
+                    <span class="val" id="bet-display">$10.00</span>
                 </div>
             </div>
 
-            <!-- Right Spiderman Character Widget -->
-            <div class="spiderman-widget" id="spidey-widget">
-                <div class="spidey-avatar">🕷️</div>
-                <div class="spidey-bubble" id="spidey-bubble">SWING & WIN!</div>
-            </div>
-        </div>
-
-        <div class="controls-panel">
-            <div class="stat-box">
-                <span class="stat-label">Balance</span>
-                <span class="stat-value" id="balance-display">$1,000.00</span>
+            <div class="win-box">
+                <span class="lbl">WIN</span>
+                <span class="win-val" id="win-display">$0.00</span>
             </div>
 
-            <div class="stat-box">
-                <span class="stat-label">Bet</span>
-                <span class="stat-value" id="bet-display">$10.00</span>
-            </div>
-
-            <div class="stat-box">
-                <span class="stat-label">Tumble Win</span>
-                <span class="stat-value win" id="win-display">$0.00</span>
-            </div>
-
-            <button id="spin-btn" class="btn-spin">SPIN</button>
+            <button id="spin-btn" class="btn-spin">
+                <span class="spin-icon">↻</span>
+            </button>
         </div>
     </div>
 
