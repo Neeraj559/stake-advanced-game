@@ -643,3 +643,42 @@ function endGame(won) {
         mainBtn.className = 'main-action-btn btn-start';
     }
 }
+// ---------------- KEYBOARD FAST-PLAY SHORTCUTS ----------------
+window.addEventListener('keydown', (e) => {
+    // Agar user kisi input box mein type kar raha ho toh shortcuts ignore honge
+    if (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+
+    const key = e.key.toLowerCase();
+
+    // Spacebar -> Start / Cashout
+    if (e.code === 'Space') {
+        e.preventDefault();
+        handleMainAction();
+    }
+
+    // Panels Jump using Arrow Keys or Number Keys (1, 2, 3, 4)
+    if (gameState === 'PLAYING' && playMode === 'manual') {
+        const conf = CONFIGS[currentDiff];
+        if (e.key === 'ArrowLeft' || e.key === '1') {
+            if (conf.panels >= 1) makeStep(0);
+        } else if (e.key === 'ArrowRight' || e.key === '2') {
+            if (conf.panels === 2) makeStep(1);
+            else if (conf.panels > 2 && e.key === '2') makeStep(1);
+        } else if (e.key === '3' && conf.panels >= 3) {
+            makeStep(2);
+        } else if (e.key === '4' && conf.panels >= 4) {
+            makeStep(3);
+        }
+    }
+
+    // Bet Modifier Hotkeys (Q = 1/2, W = 2x, E = Max)
+    if (gameState === 'IDLE' || gameState === 'ENDED') {
+        if (key === 'q') {
+            betInput.value = Math.max(1, Math.floor(parseFloat(betInput.value) / 2));
+        } else if (key === 'w') {
+            betInput.value = Math.min(parseFloat(betInput.value) * 2, balance, MAX_BET_LIMIT);
+        } else if (key === 'e') {
+            betInput.value = Math.min(balance, MAX_BET_LIMIT);
+        }
+    }
+});
