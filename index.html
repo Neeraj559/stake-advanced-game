@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Stake VIP Slots</title>
+    <title>Spider-Man: Web of Multipliers</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/7.2.4/pixi.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
@@ -11,12 +11,30 @@
 <body>
 
     <div class="game-container">
-        <div class="header-title">⚡ STAKE VIP SLOTS ⚡</div>
+        <div class="header-bar">
+            <div class="game-title">🕷️ SPIDER-MAN 1000 🕷️</div>
+            <div class="sub-badge">PAYS ANYWHERE • TUMBLE FEATURE</div>
+        </div>
         
-        <div id="canvas-container">
-            <div id="win-overlay" class="win-overlay">
-                <div class="win-title" id="win-title">BIG WIN!</div>
-                <div class="win-payout" id="win-overlay-amount">+$50.00</div>
+        <div class="main-stage">
+            <!-- Left Side Multiplier Accumulator -->
+            <div class="multiplier-box" id="multiplier-box">
+                <span class="mult-label">TOTAL MULTIPLIER</span>
+                <span class="mult-val" id="total-multiplier-val">1x</span>
+            </div>
+
+            <!-- Canvas Container -->
+            <div id="canvas-container">
+                <div id="win-overlay" class="win-overlay">
+                    <div class="win-title" id="win-title">BIG WIN!</div>
+                    <div class="win-payout" id="win-overlay-amount">+$0.00</div>
+                </div>
+            </div>
+
+            <!-- Right Spiderman Character Widget -->
+            <div class="spiderman-widget" id="spidey-widget">
+                <div class="spidey-avatar">🕷️</div>
+                <div class="spidey-bubble" id="spidey-bubble">SWING & WIN!</div>
             </div>
         </div>
 
@@ -32,7 +50,7 @@
             </div>
 
             <div class="stat-box">
-                <span class="stat-label">Last Win</span>
+                <span class="stat-label">Tumble Win</span>
                 <span class="stat-value win" id="win-display">$0.00</span>
             </div>
 

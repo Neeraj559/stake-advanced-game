@@ -7,7 +7,7 @@
 }
 
 body {
-    background: radial-gradient(circle at 50% 20%, #172a38 0%, #070e14 100%);
+    background: radial-gradient(circle at 50% 30%, #1a0b2e 0%, #06040a 100%);
     min-height: 100vh;
     display: flex;
     justify-content: center;
@@ -17,45 +17,117 @@ body {
 }
 
 .game-container {
-    background: #0f212e;
+    background: linear-gradient(180deg, #110d21 0%, #080612 100%);
     border-radius: 20px;
-    padding: 24px;
-    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.8), 0 0 30px rgba(0, 231, 1, 0.1);
-    border: 1px solid #213743;
+    padding: 20px;
+    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.9), 0 0 35px rgba(226, 36, 36, 0.2);
+    border: 2px solid #2a1b4d;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 18px;
+    gap: 16px;
     position: relative;
 }
 
-.header-title {
+.header-bar {
+    text-align: center;
+}
+
+.game-title {
     font-size: 26px;
     font-weight: 900;
-    letter-spacing: 3px;
-    background: linear-gradient(135deg, #00e701, #a3ff00);
+    letter-spacing: 2px;
+    background: linear-gradient(135deg, #ff2a2a, #3877ff);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
-    text-shadow: 0 0 25px rgba(0, 231, 1, 0.4);
+    text-shadow: 0 0 25px rgba(255, 42, 42, 0.5);
+}
+
+.sub-badge {
+    font-size: 11px;
+    font-weight: 800;
+    color: #ffd700;
+    letter-spacing: 1.5px;
+}
+
+.main-stage {
+    display: flex;
+    align-items: center;
+    gap: 16px;
 }
 
 #canvas-container {
     position: relative;
-    border-radius: 14px;
+    border-radius: 12px;
     overflow: hidden;
-    background: #071824;
-    border: 3px solid #213743;
-    box-shadow: inset 0 0 35px rgba(0, 0, 0, 0.9);
+    background: #090614;
+    border: 3px solid #3d236b;
+    box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.9), 0 0 20px rgba(78, 38, 148, 0.4);
 }
 
-/* Win Overlay Modal */
+.multiplier-box {
+    background: #191230;
+    border: 2px solid #ffaa00;
+    border-radius: 12px;
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    box-shadow: 0 0 15px rgba(255, 170, 0, 0.3);
+}
+
+.mult-label {
+    font-size: 10px;
+    font-weight: 800;
+    color: #ffcc00;
+    text-align: center;
+}
+
+.mult-val {
+    font-size: 24px;
+    font-weight: 900;
+    color: #ffffff;
+    text-shadow: 0 0 10px #ffaa00;
+}
+
+.spiderman-widget {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    width: 90px;
+}
+
+.spidey-avatar {
+    font-size: 55px;
+    filter: drop-shadow(0 0 15px rgba(255, 42, 42, 0.8));
+    animation: floating 2.5s ease-in-out infinite alternate;
+}
+
+@keyframes floating {
+    0% { transform: translateY(0px) rotate(0deg); }
+    100% { transform: translateY(-8px) rotate(3deg); }
+}
+
+.spidey-bubble {
+    background: #e22424;
+    color: #fff;
+    font-size: 9px;
+    font-weight: 900;
+    padding: 4px 6px;
+    border-radius: 6px;
+    text-align: center;
+    border: 1px solid #ff6666;
+}
+
 .win-overlay {
     position: absolute;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0, 0, 0, 0.7);
+    background: rgba(0, 0, 0, 0.8);
     display: flex;
     flex-direction: column;
     justify-content: center;
@@ -72,20 +144,14 @@ body {
 }
 
 .win-title {
-    font-size: 48px;
+    font-size: 42px;
     font-weight: 900;
     color: #ffd700;
-    text-shadow: 0 0 25px #ff9900, 0 0 50px #ffea00;
-    transform: scale(0.5);
-    transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-}
-
-.win-overlay.active .win-title {
-    transform: scale(1.1);
+    text-shadow: 0 0 25px #ff5500, 0 0 50px #ffea00;
 }
 
 .win-payout {
-    font-size: 36px;
+    font-size: 32px;
     font-weight: 800;
     color: #00e701;
     text-shadow: 0 0 20px rgba(0, 231, 1, 0.8);
@@ -96,25 +162,24 @@ body {
     justify-content: space-between;
     align-items: center;
     width: 100%;
-    background: #1a2c38;
-    padding: 14px 22px;
+    background: #140e26;
+    padding: 12px 20px;
     border-radius: 14px;
     gap: 15px;
-    border: 1px solid #2f4553;
+    border: 1px solid #2a1b4d;
 }
 
 .stat-box {
     display: flex;
     flex-direction: column;
-    gap: 3px;
+    gap: 2px;
 }
 
 .stat-label {
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 700;
-    color: #8c9bad;
+    color: #8f85b3;
     text-transform: uppercase;
-    letter-spacing: 1px;
 }
 
 .stat-value {
@@ -125,38 +190,35 @@ body {
 
 .stat-value.win {
     color: #00e701;
-    transition: transform 0.2s ease;
 }
 
 .btn-spin {
-    background: linear-gradient(180deg, #00e701 0%, #00b300 100%);
-    color: #022900;
+    background: linear-gradient(180deg, #ff2a2a 0%, #b30000 100%);
+    color: #ffffff;
     font-size: 18px;
     font-weight: 900;
     border: none;
-    padding: 14px 42px;
+    padding: 12px 38px;
     border-radius: 10px;
     cursor: pointer;
-    box-shadow: 0 5px 0 #008000, 0 0 25px rgba(0, 231, 1, 0.4);
-    transition: all 0.12s ease;
-    text-transform: uppercase;
+    box-shadow: 0 5px 0 #700000, 0 0 25px rgba(255, 42, 42, 0.5);
+    transition: all 0.1s ease;
     letter-spacing: 1px;
 }
 
 .btn-spin:hover:not(:disabled) {
-    background: linear-gradient(180deg, #1aff1b 0%, #00cc00 100%);
     transform: translateY(-2px);
-    box-shadow: 0 7px 0 #008000, 0 0 35px rgba(0, 231, 1, 0.6);
+    box-shadow: 0 7px 0 #700000, 0 0 35px rgba(255, 42, 42, 0.8);
 }
 
 .btn-spin:active:not(:disabled) {
     transform: translateY(4px);
-    box-shadow: 0 1px 0 #008000;
+    box-shadow: 0 1px 0 #700000;
 }
 
 .btn-spin:disabled {
-    background: #243542;
-    color: #557086;
+    background: #2b233d;
+    color: #635882;
     box-shadow: none;
     cursor: not-allowed;
 }
