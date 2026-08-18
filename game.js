@@ -34,11 +34,13 @@ let currentStep = 0;
 let soundEnabled = true;
 let bridgePattern = [];
 
-// Auto-play counters
 let autoRemainingRounds = 0;
 let autoTargetStep = 3;
 
-// Audio Context Web Audio Synthesizer
+// Active particles tracking list
+let activeParticles = [];
+
+// ---------------- ADVANCED AUDIO SYNTHESIS (REALISTIC GLASS) ----------------
 let audioCtx = null;
 function getAudioContext() {
     if (!audioCtx) {
@@ -55,37 +57,77 @@ function playSynthesizedSound(type) {
     if (!soundEnabled) return;
     try {
         const ctx = getAudioContext();
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-
         const now = ctx.currentTime;
+
         if (type === 'step') {
+            // Glass Landing Click + Resonance
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+
             osc.type = 'sine';
-            osc.frequency.setValueAtTime(450, now);
-            osc.frequency.exponentialRampToValueAtTime(800, now + 0.08);
+            osc.frequency.setValueAtTime(600, now);
+            osc.frequency.exponentialRampToValueAtTime(1400, now + 0.06);
             gain.gain.setValueAtTime(0.3, now);
             gain.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
             osc.start(now);
             osc.stop(now + 0.08);
         } else if (type === 'break') {
-            osc.type = 'sawtooth';
-            osc.frequency.setValueAtTime(160, now);
-            osc.frequency.exponentialRampToValueAtTime(30, now + 0.28);
-            gain.gain.setValueAtTime(0.45, now);
-            gain.gain.exponentialRampToValueAtTime(0.01, now + 0.28);
-            osc.start(now);
-            osc.stop(now + 0.28);
+            // 1. High-frequency White Noise Crack
+            const bufferSize = ctx.sampleRate * 0.45;
+            const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) {
+                data[i] = Math.random() * 2 - 1;
+            }
+
+            const noise = ctx.createBufferSource();
+            noise.buffer = buffer;
+
+            const filter = ctx.createBiquadFilter();
+            filter.type = 'highpass';
+            filter.frequency.setValueAtTime(1800, now);
+            filter.frequency.exponentialRampToValueAtTime(6000, now + 0.25);
+
+            const noiseGain = ctx.createGain();
+            noiseGain.gain.setValueAtTime(0.85, now);
+            noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+
+            noise.connect(filter);
+            filter.connect(noiseGain);
+            noiseGain.connect(ctx.destination);
+            noise.start(now);
+
+            // 2. High-Pitched Glass Tonal Shards
+            [1900, 2800, 3600, 4800].forEach((freq, idx) => {
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(freq + Math.random() * 150, now);
+                osc.frequency.exponentialRampToValueAtTime(300, now + 0.35 + idx * 0.05);
+
+                gain.gain.setValueAtTime(0.2, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35 + idx * 0.05);
+
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start(now);
+                osc.stop(now + 0.45);
+            });
         } else if (type === 'win') {
-            osc.type = 'triangle';
-            osc.frequency.setValueAtTime(523.25, now);
-            osc.frequency.setValueAtTime(659.25, now + 0.08);
-            osc.frequency.setValueAtTime(783.99, now + 0.16);
-            gain.gain.setValueAtTime(0.3, now);
-            gain.gain.exponentialRampToValueAtTime(0.01, now + 0.35);
-            osc.start(now);
-            osc.stop(now + 0.35);
+            [523.25, 659.25, 783.99, 1046.50].forEach((freq, i) => {
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(freq, now + i * 0.07);
+                gain.gain.setValueAtTime(0.25, now + i * 0.07);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + i * 0.07 + 0.3);
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start(now + i * 0.07);
+                osc.stop(now + i * 0.07 + 0.35);
+            });
         }
     } catch (e) {}
 }
@@ -142,7 +184,7 @@ function initThree() {
     dirLight.position.set(5, 12, 10);
     scene.add(dirLight);
 
-    // Player Token
+    // Player Avatar
     const charGeo = new THREE.CylinderGeometry(0.35, 0.45, 0.25, 32);
     const charMat = new THREE.MeshStandardMaterial({
         color: 0x00e701,
@@ -168,8 +210,86 @@ function onWindowResize() {
     renderer.setSize(width, height);
 }
 
+// ---------------- SHATTER PARTICLES SYSTEM ----------------
+function triggerGlassShatter(position, width, length) {
+    const shardCount = 28;
+    const shardGeo = new THREE.TetrahedronGeometry(0.18, 0);
+    const shardMat = new THREE.MeshStandardMaterial({
+        color: 0x88ccee,
+        emissive: 0x225577,
+        roughness: 0.1,
+        metalness: 0.9,
+        transparent: true,
+        opacity: 0.85
+    });
+
+    for (let i = 0; i < shardCount; i++) {
+        const mesh = new THREE.Mesh(shardGeo, shardMat);
+        mesh.position.set(
+            position.x + (Math.random() - 0.5) * width,
+            position.y + (Math.random() * 0.1),
+            position.z + (Math.random() - 0.5) * length
+        );
+        mesh.scale.set(Math.random() * 1.4 + 0.6, Math.random() * 1.4 + 0.6, Math.random() * 1.4 + 0.6);
+
+        const velocity = new THREE.Vector3(
+            (Math.random() - 0.5) * 5.5,
+            Math.random() * 4 + 2,
+            (Math.random() - 0.5) * 5.5
+        );
+        const rotSpeed = new THREE.Vector3(
+            Math.random() * 10 - 5,
+            Math.random() * 10 - 5,
+            Math.random() * 10 - 5
+        );
+
+        scene.add(mesh);
+        activeParticles.push({
+            mesh,
+            velocity,
+            rotSpeed,
+            lifetime: 1.5,
+            age: 0
+        });
+    }
+}
+
+function updateParticles(delta) {
+    for (let i = activeParticles.length - 1; i >= 0; i--) {
+        const p = activeParticles[i];
+        p.age += delta;
+
+        // Apply Gravity
+        p.velocity.y -= 14.5 * delta;
+
+        // Update Position & Rotation
+        p.mesh.position.addScaledVector(p.velocity, delta);
+        p.mesh.rotation.x += p.rotSpeed.x * delta;
+        p.mesh.rotation.y += p.rotSpeed.y * delta;
+        p.mesh.rotation.z += p.rotSpeed.z * delta;
+
+        // Fade Out
+        if (p.mesh.material.opacity > 0) {
+            p.mesh.material.opacity = Math.max(0, 1 - (p.age / p.lifetime));
+        }
+
+        if (p.age >= p.lifetime) {
+            scene.remove(p.mesh);
+            p.mesh.geometry.dispose();
+            activeParticles.splice(i, 1);
+        }
+    }
+}
+
+let lastTime = performance.now();
 function animate() {
     requestAnimationFrame(animate);
+    const now = performance.now();
+    const delta = (now - lastTime) / 1000;
+    lastTime = now;
+
+    updateParticles(delta);
+
     if (renderer && scene && camera) {
         renderer.render(scene, camera);
     }
@@ -179,6 +299,10 @@ function animate() {
 function build3DBridge() {
     panels3D.forEach(row => row.forEach(p => scene.remove(p)));
     panels3D = [];
+
+    // Clear remaining particles on reset
+    activeParticles.forEach(p => scene.remove(p.mesh));
+    activeParticles = [];
 
     const numPanels = CONFIGS[currentDiff].panels;
     const panelWidth = numPanels === 2 ? 1.4 : numPanels === 3 ? 1.0 : 0.8;
@@ -248,8 +372,6 @@ function renderDecisionButtons() {
     if (gameState !== 'PLAYING' || playMode !== 'manual') return;
 
     const numPanels = CONFIGS[currentDiff].panels;
-    const names = ['LEFT', 'MIDDLE-LEFT', 'MIDDLE-RIGHT', 'RIGHT'];
-
     for (let i = 0; i < numPanels; i++) {
         const btn = document.createElement('button');
         btn.className = 'btn-panel-choice';
@@ -355,8 +477,12 @@ function makeStep(chosenIndex) {
             }
         } else {
             playSynthesizedSound('break');
-            // Shatter Glass
-            gsap.to(targetPanel.position, { y: -8, duration: 0.6, ease: "power2.in" });
+            
+            // Shatter Glass Particles & Hide Target Platform
+            triggerGlassShatter(targetPanel.position, 1.4, 1.8);
+            targetPanel.visible = false;
+
+            // Character Fall Animation
             gsap.to(characterMesh.position, { y: -10, duration: 0.7, ease: "power2.in" });
             setTimeout(() => {
                 endGame(false);
