@@ -151,7 +151,7 @@ body {
 .viewport-3d {
     position: relative;
     width: 100%;
-    height: 380px;
+    height: 360px;
     background: radial-gradient(circle at center, #0e1d2c 0%, #050a10 100%);
     border-radius: 12px;
     border: 1px solid #1a2735;
@@ -254,6 +254,108 @@ body {
     background: #00e701;
     color: #050a10;
     border-color: #00e701;
+}
+
+/* Auto Strategy Form */
+.auto-strategy-box {
+    background: #0f1923;
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid #1a2735;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.auto-grid-row {
+    display: flex;
+    gap: 8px;
+}
+
+.auto-field {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.auto-field input {
+    background: #09121c;
+    border: 1px solid #2f4553;
+    color: #fff;
+    padding: 6px 8px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    outline: none;
+}
+
+.strategy-section {
+    background: #09121c;
+    padding: 8px;
+    border-radius: 6px;
+    border: 1px solid #1a2735;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.strategy-header {
+    font-size: 9.5px;
+    font-weight: 800;
+    color: #557086;
+    letter-spacing: 0.5px;
+}
+
+.strategy-controls {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.strat-btn {
+    background: #1a2735;
+    border: 1px solid #2f4553;
+    color: #87909c;
+    padding: 6px 10px;
+    border-radius: 5px;
+    font-size: 10px;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.strat-btn.active {
+    background: #2f4553;
+    color: #00e701;
+    border-color: #00e701;
+}
+
+.strat-input-wrap {
+    flex: 1;
+    display: flex;
+    background: #0f1923;
+    border: 1px solid #2f4553;
+    border-radius: 5px;
+    padding: 3px 6px;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.strat-label {
+    font-size: 8.5px;
+    font-weight: 700;
+    color: #557086;
+}
+
+.strat-input-wrap input {
+    width: 48px;
+    background: transparent;
+    border: none;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 800;
+    text-align: right;
+    outline: none;
 }
 
 .control-dashboard {
@@ -362,6 +464,12 @@ body {
     box-shadow: 0 0 15px rgba(0, 231, 1, 0.2);
 }
 
+.btn-stop {
+    background: #ff3344;
+    color: #ffffff;
+    box-shadow: 0 0 15px rgba(255, 51, 68, 0.3);
+}
+
 .btn-cashout {
     background: #f27011;
     color: #ffffff;
@@ -407,13 +515,8 @@ body {
     background: #09121c;
 }
 
-.history-item.win {
-    color: #00e701;
-}
-
-.history-item.loss {
-    color: #ff3344;
-}
+.history-item.win { color: #00e701; }
+.history-item.loss { color: #ff3344; }
 
 .modal-backdrop {
     display: none;
@@ -425,7 +528,6 @@ body {
     z-index: 1000;
 }
 .modal-backdrop.show { display: flex; }
-
 .modal-content {
     background: #0f1923;
     border: 1px solid #2f4553;

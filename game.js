@@ -29,18 +29,23 @@ let currentDiff = 'medium';
 let playMode = 'manual';
 let gameState = 'IDLE'; // IDLE, PLAYING, JUMPING, ENDED
 let balance = 1000.00;
-let betAmount = 10;
+let initialBaseBet = 10;
+let currentBet = 10;
 let currentStep = 0;
 let soundEnabled = true;
 let bridgePattern = [];
 
-let autoRemainingRounds = 0;
+// Auto-play State
+let isAutoRunning = false;
+let autoRemainingBets = 0;
 let autoTargetStep = 3;
+let autoStartingBalance = 1000.00;
+let autoWinAction = 'reset'; // 'reset' or 'increase'
+let autoLossAction = 'increase'; // 'reset' or 'increase'
 
-// Active particles tracking list
 let activeParticles = [];
 
-// ---------------- ADVANCED AUDIO SYNTHESIS (REALISTIC GLASS) ----------------
+// ---------------- ADVANCED AUDIO SYNTHESIS ----------------
 let audioCtx = null;
 function getAudioContext() {
     if (!audioCtx) {
@@ -60,7 +65,6 @@ function playSynthesizedSound(type) {
         const now = ctx.currentTime;
 
         if (type === 'step') {
-            // Glass Landing Click + Resonance
             const osc = ctx.createOscillator();
             const gain = ctx.createGain();
             osc.connect(gain);
@@ -74,7 +78,6 @@ function playSynthesizedSound(type) {
             osc.start(now);
             osc.stop(now + 0.08);
         } else if (type === 'break') {
-            // 1. High-frequency White Noise Crack
             const bufferSize = ctx.sampleRate * 0.45;
             const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
             const data = buffer.getChannelData(0);
@@ -99,7 +102,6 @@ function playSynthesizedSound(type) {
             noiseGain.connect(ctx.destination);
             noise.start(now);
 
-            // 2. High-Pitched Glass Tonal Shards
             [1900, 2800, 3600, 4800].forEach((freq, idx) => {
                 const osc = ctx.createOscillator();
                 const gain = ctx.createGain();
@@ -151,11 +153,20 @@ const closeModalBtn = document.getElementById('close-modal-btn');
 const serverSeedHash = document.getElementById('server-seed-hash');
 const clientSeed = document.getElementById('client-seed');
 const fairnessNonce = document.getElementById('fairness-nonce');
+
+// Strategy DOM Elements
 const autoConfigBox = document.getElementById('auto-config-box');
 const autoRoundsInput = document.getElementById('auto-rounds-input');
 const autoStepsInput = document.getElementById('auto-steps-input');
+const winResetBtn = document.getElementById('win-reset-btn');
+const winIncInput = document.getElementById('win-inc-input');
+const lossResetBtn = document.getElementById('loss-reset-btn');
+const lossDoubleBtn = document.getElementById('loss-double-btn');
+const lossIncInput = document.getElementById('loss-inc-input');
+const stopProfitInput = document.getElementById('stop-profit-input');
+const stopLossInput = document.getElementById('stop-loss-input');
 
-// ---------------- THREE.JS WORLD ----------------
+// ---------------- THREE.JS SCENE ----------------
 let scene, camera, renderer;
 let panels3D = [];
 let characterMesh;
@@ -184,7 +195,6 @@ function initThree() {
     dirLight.position.set(5, 12, 10);
     scene.add(dirLight);
 
-    // Player Avatar
     const charGeo = new THREE.CylinderGeometry(0.35, 0.45, 0.25, 32);
     const charMat = new THREE.MeshStandardMaterial({
         color: 0x00e701,
@@ -210,7 +220,7 @@ function onWindowResize() {
     renderer.setSize(width, height);
 }
 
-// ---------------- SHATTER PARTICLES SYSTEM ----------------
+// ---------------- PARTICLES ----------------
 function triggerGlassShatter(position, width, length) {
     const shardCount = 28;
     const shardGeo = new THREE.TetrahedronGeometry(0.18, 0);
@@ -258,17 +268,12 @@ function updateParticles(delta) {
     for (let i = activeParticles.length - 1; i >= 0; i--) {
         const p = activeParticles[i];
         p.age += delta;
-
-        // Apply Gravity
         p.velocity.y -= 14.5 * delta;
-
-        // Update Position & Rotation
         p.mesh.position.addScaledVector(p.velocity, delta);
         p.mesh.rotation.x += p.rotSpeed.x * delta;
         p.mesh.rotation.y += p.rotSpeed.y * delta;
         p.mesh.rotation.z += p.rotSpeed.z * delta;
 
-        // Fade Out
         if (p.mesh.material.opacity > 0) {
             p.mesh.material.opacity = Math.max(0, 1 - (p.age / p.lifetime));
         }
@@ -300,7 +305,6 @@ function build3DBridge() {
     panels3D.forEach(row => row.forEach(p => scene.remove(p)));
     panels3D = [];
 
-    // Clear remaining particles on reset
     activeParticles.forEach(p => scene.remove(p.mesh));
     activeParticles = [];
 
@@ -381,7 +385,7 @@ function renderDecisionButtons() {
     }
 }
 
-// ---------------- PROVABLY FAIR SEED ----------------
+// ---------------- PROVABLY FAIR ----------------
 function generateProvablyFairSeed() {
     const randomHex = Array.from({length: 64}, () => Math.floor(Math.random()*16).toString(16)).join('');
     serverSeedHash.value = randomHex;
@@ -395,14 +399,15 @@ function generateProvablyFairSeed() {
     }
 }
 
-// ---------------- GAMEPLAY MECHANICS ----------------
+// ---------------- GAMEPLAY & STRATEGY ENGINE ----------------
 function startNewGame() {
-    if (balance < betAmount) {
+    if (balance < currentBet) {
         alert("Insufficient balance!");
+        stopAutoPlay();
         return;
     }
 
-    balance -= betAmount;
+    balance -= currentBet;
     balanceDisplay.textContent = `$${balance.toFixed(2)}`;
     currentStep = 0;
     gameState = 'PLAYING';
@@ -411,8 +416,10 @@ function startNewGame() {
     updateHud();
     renderDecisionButtons();
 
-    mainBtn.textContent = 'CHOOSE A PANEL';
-    mainBtn.className = 'main-action-btn btn-disabled';
+    if (playMode === 'manual') {
+        mainBtn.textContent = 'CHOOSE A PANEL';
+        mainBtn.className = 'main-action-btn btn-disabled';
+    }
     winCard.classList.remove('show');
 }
 
@@ -423,25 +430,24 @@ function makeStep(chosenIndex) {
     const targetPanel = panels3D[currentStep][chosenIndex];
     const isSafe = (chosenIndex === bridgePattern[currentStep]);
 
-    // Jump Animation
+    // Jump Motion
     gsap.to(characterMesh.position, {
         x: targetPanel.position.x,
         z: targetPanel.position.z,
-        duration: 0.3,
+        duration: 0.28,
         ease: "power2.out"
     });
     gsap.to(characterMesh.position, {
         y: 1.2,
-        duration: 0.15,
+        duration: 0.14,
         yoyo: true,
         repeat: 1,
         ease: "power1.inOut"
     });
 
-    // Camera track
     gsap.to(camera.position, {
         z: targetPanel.position.z + 7.5,
-        duration: 0.35,
+        duration: 0.32,
         ease: "power2.out"
     });
 
@@ -460,41 +466,42 @@ function makeStep(chosenIndex) {
                 renderDecisionButtons();
 
                 const currentMult = CONFIGS[currentDiff].multipliers[currentStep - 1];
-                const currentPayout = (betAmount * currentMult).toFixed(2);
-                mainBtn.textContent = `CASHOUT $${currentPayout} (${formatMultiplier(currentMult)}x)`;
-                mainBtn.className = 'main-action-btn btn-cashout';
+                const currentPayout = (currentBet * currentMult).toFixed(2);
+                
+                if (playMode === 'manual') {
+                    mainBtn.textContent = `CASHOUT $${currentPayout} (${formatMultiplier(currentMult)}x)`;
+                    mainBtn.className = 'main-action-btn btn-cashout';
+                }
 
-                if (playMode === 'auto') {
+                if (playMode === 'auto' && isAutoRunning) {
                     if (currentStep >= autoTargetStep) {
                         cashout(false);
                     } else {
                         setTimeout(() => {
+                            if (!isAutoRunning) return;
                             const nextChoice = Math.floor(Math.random() * CONFIGS[currentDiff].panels);
                             makeStep(nextChoice);
-                        }, 400);
+                        }, 320);
                     }
                 }
             }
         } else {
             playSynthesizedSound('break');
-            
-            // Shatter Glass Particles & Hide Target Platform
             triggerGlassShatter(targetPanel.position, 1.4, 1.8);
             targetPanel.visible = false;
 
-            // Character Fall Animation
             gsap.to(characterMesh.position, { y: -10, duration: 0.7, ease: "power2.in" });
             setTimeout(() => {
                 endGame(false);
             }, 600);
         }
-    }, 320);
+    }, 300);
 }
 
 function cashout(isMaxWin = false) {
     if (gameState !== 'PLAYING' && !isMaxWin) return;
     const finalMult = CONFIGS[currentDiff].multipliers[currentStep - 1] || 1;
-    const payout = betAmount * finalMult;
+    const payout = currentBet * finalMult;
     balance += payout;
     balanceDisplay.textContent = `$${balance.toFixed(2)}`;
 
@@ -514,24 +521,92 @@ function endGame(won) {
     decisionButtons.innerHTML = '';
 
     if (!won) {
-        addHistoryRecord(false, 0, betAmount);
+        addHistoryRecord(false, 0, currentBet);
     }
 
-    if (playMode === 'auto' && autoRemainingRounds > 1) {
-        autoRemainingRounds--;
-        setTimeout(() => {
-            if (playMode === 'auto') {
+    if (playMode === 'auto' && isAutoRunning) {
+        // Evaluate Stop Profit / Stop Loss Limits
+        const profit = balance - autoStartingBalance;
+        const stopProfit = parseFloat(stopProfitInput.value);
+        const stopLoss = parseFloat(stopLossInput.value);
+
+        if (!isNaN(stopProfit) && stopProfit > 0 && profit >= stopProfit) {
+            stopAutoPlay("Target Profit Reached!");
+            return;
+        }
+        if (!isNaN(stopLoss) && stopLoss > 0 && profit <= -stopLoss) {
+            stopAutoPlay("Stop Loss Triggered!");
+            return;
+        }
+
+        // Apply Betting Strategy
+        if (won) {
+            if (autoWinAction === 'reset') {
+                currentBet = initialBaseBet;
+            } else {
+                const incPct = parseFloat(winIncInput.value) || 0;
+                currentBet = Math.min(currentBet * (1 + incPct / 100), MAX_BET_LIMIT, balance);
+            }
+        } else {
+            if (autoLossAction === 'reset') {
+                currentBet = initialBaseBet;
+            } else {
+                const incPct = parseFloat(lossIncInput.value) || 100;
+                currentBet = Math.min(currentBet * (1 + incPct / 100), MAX_BET_LIMIT, balance);
+            }
+        }
+
+        currentBet = parseFloat(currentBet.toFixed(2));
+        betInput.value = currentBet;
+
+        // Rounds tracking (0 = infinite)
+        if (autoRemainingBets > 1 || autoRemainingBets === 0) {
+            if (autoRemainingBets > 1) autoRemainingBets--;
+            
+            setTimeout(() => {
+                if (!isAutoRunning) return;
                 startNewGame();
                 setTimeout(() => {
+                    if (!isAutoRunning) return;
                     const nextChoice = Math.floor(Math.random() * CONFIGS[currentDiff].panels);
                     makeStep(nextChoice);
-                }, 300);
-            }
-        }, 1200);
+                }, 280);
+            }, 900);
+        } else {
+            stopAutoPlay("Auto-Bet Completed!");
+        }
     } else {
         mainBtn.textContent = 'START CROSSING';
         mainBtn.className = 'main-action-btn btn-start';
     }
+}
+
+function startAutoPlay() {
+    isAutoRunning = true;
+    initialBaseBet = parseFloat(betInput.value) || 10;
+    currentBet = initialBaseBet;
+    autoStartingBalance = balance;
+    autoRemainingBets = parseInt(autoRoundsInput.value) || 0;
+    autoTargetStep = Math.min(Math.max(parseInt(autoStepsInput.value) || 3, 1), 13);
+
+    mainBtn.textContent = 'STOP AUTO-BET';
+    mainBtn.className = 'main-action-btn btn-stop';
+
+    startNewGame();
+    setTimeout(() => {
+        if (!isAutoRunning) return;
+        const nextChoice = Math.floor(Math.random() * CONFIGS[currentDiff].panels);
+        makeStep(nextChoice);
+    }, 280);
+}
+
+function stopAutoPlay(msg) {
+    isAutoRunning = false;
+    currentBet = initialBaseBet;
+    betInput.value = initialBaseBet;
+    mainBtn.textContent = 'START AUTO-BET';
+    mainBtn.className = 'main-action-btn btn-start';
+    if (msg) alert(msg);
 }
 
 function addHistoryRecord(won, mult, amount) {
@@ -542,29 +617,62 @@ function addHistoryRecord(won, mult, amount) {
 }
 
 function handleMainAction() {
-    if (gameState === 'IDLE' || gameState === 'ENDED') {
-        if (playMode === 'auto') {
-            autoRemainingRounds = parseInt(autoRoundsInput.value) || 10;
-            autoTargetStep = parseInt(autoStepsInput.value) || 3;
-            startNewGame();
-            setTimeout(() => {
-                const nextChoice = Math.floor(Math.random() * CONFIGS[currentDiff].panels);
-                makeStep(nextChoice);
-            }, 300);
+    if (playMode === 'auto') {
+        if (isAutoRunning) {
+            stopAutoPlay();
         } else {
-            startNewGame();
+            startAutoPlay();
         }
-    } else if (gameState === 'PLAYING') {
-        if (currentStep > 0) cashout(false);
+    } else {
+        if (gameState === 'IDLE' || gameState === 'ENDED') {
+            currentBet = parseFloat(betInput.value) || 10;
+            startNewGame();
+        } else if (gameState === 'PLAYING') {
+            if (currentStep > 0) cashout(false);
+        }
     }
 }
 
 // ---------------- EVENT LISTENERS ----------------
 mainBtn.addEventListener('click', handleMainAction);
 
+// Strategy Config Events
+winResetBtn.addEventListener('click', () => {
+    autoWinAction = 'reset';
+    winResetBtn.classList.add('active');
+    winIncInput.parentElement.style.opacity = '0.5';
+});
+winIncInput.addEventListener('input', () => {
+    if (parseFloat(winIncInput.value) > 0) {
+        autoWinAction = 'increase';
+        winResetBtn.classList.remove('active');
+        winIncInput.parentElement.style.opacity = '1';
+    }
+});
+
+lossResetBtn.addEventListener('click', () => {
+    autoLossAction = 'reset';
+    lossResetBtn.classList.add('active');
+    lossDoubleBtn.classList.remove('active');
+    lossIncInput.parentElement.style.opacity = '0.5';
+});
+lossDoubleBtn.addEventListener('click', () => {
+    autoLossAction = 'increase';
+    lossIncInput.value = 100;
+    lossDoubleBtn.classList.add('active');
+    lossResetBtn.classList.remove('active');
+    lossIncInput.parentElement.style.opacity = '1';
+});
+lossIncInput.addEventListener('input', () => {
+    autoLossAction = 'increase';
+    lossResetBtn.classList.remove('active');
+    lossDoubleBtn.classList.toggle('active', lossIncInput.value === '100');
+    lossIncInput.parentElement.style.opacity = '1';
+});
+
 document.querySelectorAll('.diff-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
-        if (gameState === 'PLAYING' || gameState === 'JUMPING') return;
+        if (gameState === 'PLAYING' || gameState === 'JUMPING' || isAutoRunning) return;
         document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         currentDiff = btn.dataset.diff;
@@ -577,40 +685,46 @@ document.querySelectorAll('.chip-btn').forEach(btn => {
     btn.addEventListener('click', () => {
         if (gameState === 'IDLE' || gameState === 'ENDED') {
             betInput.value = btn.dataset.amt;
-            betAmount = parseFloat(btn.dataset.amt);
+            currentBet = parseFloat(btn.dataset.amt);
         }
     });
 });
 
 document.getElementById('btn-half').addEventListener('click', () => {
     betInput.value = Math.max(1, Math.floor(parseFloat(betInput.value) / 2));
-    betAmount = parseFloat(betInput.value);
+    currentBet = parseFloat(betInput.value);
 });
 document.getElementById('btn-double').addEventListener('click', () => {
     betInput.value = Math.min(parseFloat(betInput.value) * 2, balance, MAX_BET_LIMIT);
-    betAmount = parseFloat(betInput.value);
+    currentBet = parseFloat(betInput.value);
 });
 document.getElementById('btn-max').addEventListener('click', () => {
     betInput.value = Math.min(balance, MAX_BET_LIMIT);
-    betAmount = parseFloat(betInput.value);
+    currentBet = parseFloat(betInput.value);
 });
 
 betInput.addEventListener('input', () => {
-    betAmount = Math.max(1, Math.min(parseFloat(betInput.value) || 1, MAX_BET_LIMIT));
+    currentBet = Math.max(1, Math.min(parseFloat(betInput.value) || 1, MAX_BET_LIMIT));
 });
 
 document.getElementById('tab-manual').addEventListener('click', () => {
+    if (isAutoRunning) stopAutoPlay();
     playMode = 'manual';
     document.getElementById('tab-manual').classList.add('active');
     document.getElementById('tab-auto').classList.remove('active');
     autoConfigBox.style.display = 'none';
+    mainBtn.textContent = 'START CROSSING';
+    mainBtn.className = 'main-action-btn btn-start';
     renderDecisionButtons();
 });
+
 document.getElementById('tab-auto').addEventListener('click', () => {
     playMode = 'auto';
     document.getElementById('tab-auto').classList.add('active');
     document.getElementById('tab-manual').classList.remove('active');
     autoConfigBox.style.display = 'flex';
+    mainBtn.textContent = isAutoRunning ? 'STOP AUTO-BET' : 'START AUTO-BET';
+    mainBtn.className = isAutoRunning ? 'main-action-btn btn-stop' : 'main-action-btn btn-start';
     decisionButtons.innerHTML = '';
 });
 
@@ -619,44 +733,6 @@ closeModalBtn.addEventListener('click', () => fairnessModal.classList.remove('sh
 soundBtn.addEventListener('click', () => {
     soundEnabled = !soundEnabled;
     soundBtn.textContent = soundEnabled ? '🔊' : '🔇';
-});
-
-// ---------------- KEYBOARD SHORTCUTS ----------------
-window.addEventListener('keydown', (e) => {
-    if (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
-
-    const key = e.key.toLowerCase();
-    if (e.code === 'Space') {
-        e.preventDefault();
-        handleMainAction();
-    }
-
-    if (gameState === 'PLAYING' && playMode === 'manual') {
-        const conf = CONFIGS[currentDiff];
-        if (e.key === 'ArrowLeft' || e.key === '1') {
-            if (conf.panels >= 1) makeStep(0);
-        } else if (e.key === 'ArrowRight' || e.key === '2') {
-            if (conf.panels === 2) makeStep(1);
-            else if (conf.panels > 2 && e.key === '2') makeStep(1);
-        } else if (e.key === '3' && conf.panels >= 3) {
-            makeStep(2);
-        } else if (e.key === '4' && conf.panels >= 4) {
-            makeStep(3);
-        }
-    }
-
-    if (gameState === 'IDLE' || gameState === 'ENDED') {
-        if (key === 'q') {
-            betInput.value = Math.max(1, Math.floor(parseFloat(betInput.value) / 2));
-            betAmount = parseFloat(betInput.value);
-        } else if (key === 'w') {
-            betInput.value = Math.min(parseFloat(betInput.value) * 2, balance, MAX_BET_LIMIT);
-            betAmount = parseFloat(betInput.value);
-        } else if (key === 'e') {
-            betInput.value = Math.min(balance, MAX_BET_LIMIT);
-            betAmount = parseFloat(betInput.value);
-        }
-    }
 });
 
 // ---------------- INIT ON LOAD ----------------

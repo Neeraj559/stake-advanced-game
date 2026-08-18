@@ -48,14 +48,51 @@
             <div class="decision-overlay" id="decision-buttons"></div>
         </div>
 
-        <div class="auto-row" id="auto-config-box" style="display: none;">
-            <div class="auto-field">
-                <span class="lbl">NUMBER OF BETS</span>
-                <input type="number" id="auto-rounds-input" value="10" min="1" max="100">
+        <!-- Advanced Auto-Strategy Dashboard -->
+        <div class="auto-strategy-box" id="auto-config-box" style="display: none;">
+            <div class="auto-grid-row">
+                <div class="auto-field">
+                    <span class="lbl">NUMBER OF BETS (0 = ∞)</span>
+                    <input type="number" id="auto-rounds-input" value="10" min="0" max="1000">
+                </div>
+                <div class="auto-field">
+                    <span class="lbl">STOP ON STEP (1-13)</span>
+                    <input type="number" id="auto-steps-input" value="3" min="1" max="13">
+                </div>
             </div>
-            <div class="auto-field">
-                <span class="lbl">STOP ON STEP (1-13)</span>
-                <input type="number" id="auto-steps-input" value="3" min="1" max="13">
+
+            <div class="strategy-section">
+                <div class="strategy-header">ON WIN</div>
+                <div class="strategy-controls">
+                    <button class="strat-btn active" id="win-reset-btn">RESET</button>
+                    <div class="strat-input-wrap">
+                        <span class="strat-label">INCREASE BY %</span>
+                        <input type="number" id="win-inc-input" value="0" min="0" max="1000">
+                    </div>
+                </div>
+            </div>
+
+            <div class="strategy-section">
+                <div class="strategy-header">ON LOSS (MARTINGALE)</div>
+                <div class="strategy-controls">
+                    <button class="strat-btn" id="loss-reset-btn">RESET</button>
+                    <button class="strat-btn active" id="loss-double-btn">2X (100%)</button>
+                    <div class="strat-input-wrap">
+                        <span class="strat-label">INCREASE BY %</span>
+                        <input type="number" id="loss-inc-input" value="100" min="0" max="1000">
+                    </div>
+                </div>
+            </div>
+
+            <div class="auto-grid-row">
+                <div class="auto-field">
+                    <span class="lbl">STOP ON PROFIT ($)</span>
+                    <input type="number" id="stop-profit-input" placeholder="Optional" min="0">
+                </div>
+                <div class="auto-field">
+                    <span class="lbl">STOP ON LOSS ($)</span>
+                    <input type="number" id="stop-loss-input" placeholder="Optional" min="0">
+                </div>
             </div>
         </div>
 
@@ -67,7 +104,7 @@
                 <button class="diff-btn" data-diff="extreme">EXTREME</button>
             </div>
 
-            <span class="lbl">BET AMOUNT ($)</span>
+            <span class="lbl">BASE BET AMOUNT ($)</span>
             <div class="input-row">
                 <div class="input-shell">
                     <input type="number" id="bet-input" value="10" min="1" max="10000" step="1">
