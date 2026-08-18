@@ -48,32 +48,27 @@ let autoTargetSteps = 3;
 let nonce = 0;
 let currentServerSeed = '';
 
-// Web Audio & Ambient Synth
+// Web Audio & Synth
 const AudioCtx = window.AudioContext || window.webkitAudioContext;
 let audio = null;
-let ambientOsc = null;
 let ambientGain = null;
 let soundEnabled = true;
 
 function initAudio() {
     if (!audio) {
         audio = new AudioCtx();
-        startAmbientDrone();
+        try {
+            const ambientOsc = audio.createOscillator();
+            ambientGain = audio.createGain();
+            ambientOsc.type = 'sine';
+            ambientOsc.frequency.setValueAtTime(55, audio.currentTime);
+            ambientGain.gain.setValueAtTime(0.03, audio.currentTime);
+            ambientOsc.connect(ambientGain);
+            ambientGain.connect(audio.destination);
+            ambientOsc.start();
+        } catch(e) {}
     }
     if (audio.state === 'suspended') audio.resume();
-}
-
-function startAmbientDrone() {
-    try {
-        ambientOsc = audio.createOscillator();
-        ambientGain = audio.createGain();
-        ambientOsc.type = 'sine';
-        ambientOsc.frequency.setValueAtTime(55, audio.currentTime); // Low A hum
-        ambientGain.gain.setValueAtTime(0.04, audio.currentTime);
-        ambientOsc.connect(ambientGain);
-        ambientGain.connect(audio.destination);
-        ambientOsc.start();
-    } catch(e) {}
 }
 
 function playSound(type) {
@@ -87,56 +82,56 @@ function playSound(type) {
 
     if (type === 'jump') {
         osc.type = 'sine';
-        osc.frequency.setValueAtTime(240, now);
-        osc.frequency.exponentialRampToValueAtTime(540, now + 0.18);
-        gain.gain.setValueAtTime(0.25, now);
-        gain.gain.linearRampToValueAtTime(0.01, now + 0.18);
+        osc.frequency.setValueAtTime(220, now);
+        osc.frequency.exponentialRampToValueAtTime(580, now + 0.16);
+        gain.gain.setValueAtTime(0.3, now);
+        gain.gain.linearRampToValueAtTime(0.01, now + 0.16);
         osc.start(now);
-        osc.stop(now + 0.18);
+        osc.stop(now + 0.16);
     } else if (type === 'land') {
         osc.type = 'triangle';
-        osc.frequency.setValueAtTime(460, now);
-        gain.gain.setValueAtTime(0.3, now);
-        gain.gain.linearRampToValueAtTime(0.01, now + 0.12);
+        osc.frequency.setValueAtTime(520, now);
+        gain.gain.setValueAtTime(0.35, now);
+        gain.gain.linearRampToValueAtTime(0.01, now + 0.14);
         osc.start(now);
-        osc.stop(now + 0.12);
+        osc.stop(now + 0.14);
     } else if (type === 'shatter') {
         osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(160, now);
-        osc.frequency.exponentialRampToValueAtTime(30, now + 0.5);
-        gain.gain.setValueAtTime(0.5, now);
-        gain.gain.linearRampToValueAtTime(0.01, now + 0.5);
+        osc.frequency.setValueAtTime(200, now);
+        osc.frequency.exponentialRampToValueAtTime(20, now + 0.6);
+        gain.gain.setValueAtTime(0.6, now);
+        gain.gain.linearRampToValueAtTime(0.01, now + 0.6);
         osc.start(now);
-        osc.stop(now + 0.5);
+        osc.stop(now + 0.6);
     } else if (type === 'cashout') {
         osc.type = 'sine';
-        osc.frequency.setValueAtTime(520, now);
-        osc.frequency.linearRampToValueAtTime(1040, now + 0.35);
+        osc.frequency.setValueAtTime(440, now);
+        osc.frequency.linearRampToValueAtTime(880, now + 0.4);
         gain.gain.setValueAtTime(0.4, now);
-        gain.gain.linearRampToValueAtTime(0.01, now + 0.35);
+        gain.gain.linearRampToValueAtTime(0.01, now + 0.4);
         osc.start(now);
-        osc.stop(now + 0.35);
+        osc.stop(now + 0.4);
     }
 }
 
 // ---------------- THREE.JS 3D SCENE ----------------
 const viewport = document.getElementById('viewport');
 const scene = new THREE.Scene();
-scene.fog = new THREE.FogExp2(0x02060e, 0.022);
+scene.fog = new THREE.FogExp2(0x020408, 0.02);
 
-const camera = new THREE.PerspectiveCamera(52, viewport.clientWidth / viewport.clientHeight, 0.1, 1000);
-const INITIAL_CAM_POS = { x: 0, y: 3.5, z: 4.6 };
-camera.position.set(INITIAL_CAM_POS.x, INITIAL_CAM_POS.y, INITIAL_CAM_POS.z);
-camera.lookAt(0, 0.8, -8);
+const camera = new THREE.PerspectiveCamera(54, viewport.clientWidth / viewport.clientHeight, 0.1, 1000);
+const INITIAL_CAM = { x: 0, y: 3.6, z: 4.8, rx: -0.28 };
+camera.position.set(INITIAL_CAM.x, INITIAL_CAM.y, INITIAL_CAM.z);
+camera.rotation.x = INITIAL_CAM.rx;
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
 renderer.setSize(viewport.clientWidth, viewport.clientHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 viewport.appendChild(renderer.domElement);
 
-scene.add(new THREE.AmbientLight(0x406085, 0.9));
-const dirLight = new THREE.DirectionalLight(0x00e7ff, 1.2);
-dirLight.position.set(10, 20, 10);
+scene.add(new THREE.AmbientLight(0x4a6d88, 1.1));
+const dirLight = new THREE.DirectionalLight(0x00e7ff, 1.6);
+dirLight.position.set(8, 20, 8);
 scene.add(dirLight);
 
 const STEP_DISTANCE = 3.2;
@@ -148,10 +143,10 @@ function createGlassTile(x, z, width = 1.1) {
     const glassMat = new THREE.MeshPhysicalMaterial({
         color: 0x00d2ff,
         transparent: true,
-        opacity: 0.45,
-        roughness: 0.1,
-        metalness: 0.15,
-        transmission: 0.85,
+        opacity: 0.5,
+        roughness: 0.08,
+        metalness: 0.1,
+        transmission: 0.9,
         ior: 1.5
     });
     const paneGeom = new THREE.BoxGeometry(width, 0.08, 1.8);
@@ -192,7 +187,7 @@ function build3DBridge() {
 }
 build3DBridge();
 
-// Human Avatar
+// Human Avatar Model
 const humanGroup = new THREE.Group();
 const skinMat = new THREE.MeshLambertMaterial({ color: 0xffdbac });
 const jacketMat = new THREE.MeshLambertMaterial({ color: 0x00ff88 });
@@ -218,37 +213,38 @@ humanGroup.position.set(0, 0.05, 0.8);
 scene.add(humanGroup);
 
 function triggerGlassShatter(x, y, z) {
-    const shardGeom = new THREE.TetrahedronGeometry(0.14, 0);
+    const shardGeom = new THREE.TetrahedronGeometry(0.13, 0);
     const shardMat = new THREE.MeshBasicMaterial({ color: 0x00e7ff, wireframe: true });
 
-    for (let i = 0; i < 24; i++) {
+    for (let i = 0; i < 36; i++) {
         const shard = new THREE.Mesh(shardGeom, shardMat);
-        shard.position.set(x + (Math.random() - 0.5) * 0.8, y, z + (Math.random() - 0.5) * 0.8);
-        shard.velocity = new THREE.Vector3((Math.random() - 0.5) * 0.14, Math.random() * 0.08 - 0.04, (Math.random() - 0.5) * 0.14);
+        shard.position.set(x + (Math.random() - 0.5) * 0.9, y + 0.1, z + (Math.random() - 0.5) * 0.9);
+        shard.velocity = new THREE.Vector3(
+            (Math.random() - 0.5) * 0.22,
+            Math.random() * 0.14 + 0.05,
+            (Math.random() - 0.5) * 0.22
+        );
+        shard.rotSpeed = new THREE.Vector3(Math.random() * 0.2, Math.random() * 0.2, Math.random() * 0.2);
         scene.add(shard);
         shardParticles.push(shard);
     }
 }
 
-// Raycaster
-const raycaster = new THREE.Raycaster();
-const mouse = new THREE.Vector2();
-
-viewport.addEventListener('click', (e) => {
-    if (gameState !== 'PLAYING' || playMode === 'auto') return;
-    const rect = viewport.getBoundingClientRect();
-    mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-    mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-
-    raycaster.setFromCamera(mouse, camera);
-    const currentStepPanels = bridgeSteps[currentStep].panels.map(p => p.pane);
-    const intersects = raycaster.intersectObjects(currentStepPanels);
-
-    if (intersects.length > 0) {
-        const parentGroup = intersects[0].object.parent;
-        makeStep(parentGroup.userData.panelIdx);
-    }
-});
+function cameraShake(intensity = 0.15, duration = 0.3) {
+    const origY = camera.position.y;
+    const origX = camera.position.x;
+    gsap.to(camera.position, {
+        x: origX + (Math.random() - 0.5) * intensity,
+        y: origY + (Math.random() - 0.5) * intensity,
+        duration: 0.05,
+        repeat: Math.floor(duration / 0.05),
+        yoyo: true,
+        onComplete: () => {
+            camera.position.x = origX;
+            camera.position.y = origY;
+        }
+    });
+}
 
 function animate() {
     requestAnimationFrame(animate);
@@ -260,10 +256,11 @@ function animate() {
     for (let i = shardParticles.length - 1; i >= 0; i--) {
         const s = shardParticles[i];
         s.position.add(s.velocity);
-        s.velocity.y -= 0.008;
-        s.rotation.x += 0.06;
+        s.velocity.y -= 0.012; // Gravity
+        s.rotation.x += s.rotSpeed.x;
+        s.rotation.y += s.rotSpeed.y;
 
-        if (s.position.y < -25) {
+        if (s.position.y < -30) {
             scene.remove(s);
             shardParticles.splice(i, 1);
         }
@@ -273,7 +270,7 @@ function animate() {
 }
 animate();
 
-// ---------------- GAMEPLAY & CONTROLS ----------------
+// ---------------- UI & GAME CONTROLS ----------------
 const balanceDisplay = document.getElementById('balance-display');
 const betInput = document.getElementById('bet-input');
 const mainBtn = document.getElementById('main-btn');
@@ -289,14 +286,12 @@ const winMultiplier = document.getElementById('win-multiplier');
 const winPayout = document.getElementById('win-payout');
 const historyList = document.getElementById('history-list');
 
-// Tabs & Auto Mode Elements
 const tabManual = document.getElementById('tab-manual');
 const tabAuto = document.getElementById('tab-auto');
 const autoConfigBox = document.getElementById('auto-config-box');
 const autoRoundsInput = document.getElementById('auto-rounds-input');
 const autoStepsInput = document.getElementById('auto-steps-input');
 
-// Fairness Elements
 const fairnessBtn = document.getElementById('fairness-btn');
 const fairnessModal = document.getElementById('fairness-modal');
 const closeModalBtn = document.getElementById('close-modal-btn');
@@ -304,7 +299,6 @@ const serverSeedHashInput = document.getElementById('server-seed-hash');
 const fairnessNonceInput = document.getElementById('fairness-nonce');
 const soundToggleBtn = document.getElementById('sound-toggle-btn');
 
-// Mode Tab Switching (Smooth & Responsive)
 function switchMode(mode) {
     if (gameState === 'JUMPING') return;
     playMode = mode;
@@ -331,20 +325,17 @@ function switchMode(mode) {
 tabManual.onclick = (e) => { e.stopPropagation(); switchMode('manual'); };
 tabAuto.onclick = (e) => { e.stopPropagation(); switchMode('auto'); };
 
-// Sound Toggle
 soundToggleBtn.addEventListener('click', () => {
     soundEnabled = !soundEnabled;
     soundToggleBtn.textContent = soundEnabled ? '🔊' : '🔇';
-    if (ambientGain) {
-        ambientGain.gain.setValueAtTime(soundEnabled ? 0.04 : 0, audio.currentTime);
+    if (ambientGain && audio) {
+        ambientGain.gain.setValueAtTime(soundEnabled ? 0.03 : 0, audio.currentTime);
     }
 });
 
-// Provably Fair Modal
 fairnessBtn.addEventListener('click', () => fairnessModal.style.display = 'flex');
 closeModalBtn.addEventListener('click', () => fairnessModal.style.display = 'none');
 
-// SHA-256 Pseudo Generator for Provably Fair
 function generateProvablyFairSeed() {
     nonce++;
     currentServerSeed = 'seed_' + Math.random().toString(36).substring(2) + Date.now().toString(36);
@@ -360,13 +351,13 @@ function showStakeWinAnimation(multiplier, amount) {
     gsap.killTweensOf(winCard);
     gsap.timeline()
         .fromTo(winCard, 
-            { scale: 0.3, opacity: 0 }, 
-            { scale: 1, opacity: 1, duration: 0.35, ease: "back.out(2)" }
+            { scale: 0.2, opacity: 0, rotate: -6 }, 
+            { scale: 1, opacity: 1, rotate: 0, duration: 0.4, ease: "back.out(2.2)" }
         )
         .to(winCard, {
             scale: 0.8,
             opacity: 0,
-            delay: 2.2,
+            delay: 2.3,
             duration: 0.3,
             ease: "power2.in"
         });
@@ -486,7 +477,7 @@ function startNewGame() {
 
     gsap.to(humanGroup.position, { x: 0, y: 0.05, z: 0.8, duration: 0.4 });
     gsap.to(humanGroup.rotation, { x: 0, y: 0, z: 0, duration: 0.4 });
-    gsap.to(camera.position, { x: INITIAL_CAM_POS.x, y: INITIAL_CAM_POS.y, z: INITIAL_CAM_POS.z, duration: 0.4 });
+    gsap.to(camera.position, { x: INITIAL_CAM.x, y: INITIAL_CAM.y, z: INITIAL_CAM.z, duration: 0.4 });
 
     highlightCurrentStep();
 
@@ -515,7 +506,10 @@ function enableChoiceButtons(enable) {
 function highlightCurrentStep() {
     if (currentStep >= TOTAL_STEPS) return;
     const step = bridgeSteps[currentStep];
-    step.panels.forEach(p => p.frame.material.color.setHex(0x00ff88));
+    step.panels.forEach(p => {
+        p.frame.material.color.setHex(0x00ff88);
+        gsap.to(p.pane.material, { opacity: 0.75, duration: 0.25, yoyo: true, repeat: 1 });
+    });
 }
 
 function makeStep(chosenIndex) {
@@ -531,28 +525,44 @@ function makeStep(chosenIndex) {
 
     playSound('jump');
 
+    // Dynamic Cinematic Jump Timeline
     gsap.timeline()
         .to(humanGroup.position, {
             x: targetX,
             z: targetZ,
-            duration: 0.42,
+            duration: 0.44,
             ease: "power1.inOut"
         })
         .to(humanGroup.position, {
-            y: 1.5,
-            duration: 0.21,
+            y: 1.6,
+            duration: 0.22,
             yoyo: true,
             repeat: 1,
             ease: "power2.out"
         }, 0)
+        .to(humanGroup.rotation, {
+            x: -0.18,
+            duration: 0.22,
+            yoyo: true,
+            repeat: 1
+        }, 0)
         .call(() => {
-            gsap.to(camera.position, { z: targetZ + 5.5, y: 3.4, duration: 0.45 });
+            gsap.to(camera.position, { 
+                z: targetZ + 5.2, 
+                y: 3.5, 
+                x: targetX * 0.35, 
+                duration: 0.45, 
+                ease: "power2.out" 
+            });
 
             if (isSafe) {
                 playSound('land');
                 const chosenGroup = bridgeSteps[stepIndexNow].panels[chosenIndex];
                 chosenGroup.pane.material.color.setHex(0x00ff88);
                 chosenGroup.frame.material.color.setHex(0x00ff88);
+
+                // Neon pulse ripple
+                gsap.to(chosenGroup.scale, { x: 1.08, z: 1.08, duration: 0.12, yoyo: true, repeat: 1 });
 
                 setTimeout(() => {
                     bridgeSteps[stepIndexNow].panels.forEach((p, idx) => {
@@ -561,7 +571,7 @@ function makeStep(chosenIndex) {
                             scene.remove(p);
                         }
                     });
-                }, 150);
+                }, 140);
 
                 currentStep++;
                 const mult = conf.multipliers[currentStep - 1];
@@ -584,12 +594,13 @@ function makeStep(chosenIndex) {
                 }
             } else {
                 playSound('shatter');
+                cameraShake(0.22, 0.35);
                 const brokenGroup = bridgeSteps[stepIndexNow].panels[chosenIndex];
                 triggerGlassShatter(targetX, 0, targetZ);
                 scene.remove(brokenGroup);
 
-                gsap.to(humanGroup.position, { y: -25, duration: 1.2, ease: "power2.in" });
-                gsap.to(humanGroup.rotation, { x: 3, z: 2, duration: 1.2 });
+                gsap.to(humanGroup.position, { y: -25, duration: 1.1, ease: "power2.in" });
+                gsap.to(humanGroup.rotation, { x: 4, z: 3, duration: 1.1 });
 
                 addHistoryItem(false, 0, 0);
                 endGame(false);
@@ -604,7 +615,7 @@ function cashOut() {
     balanceDisplay.textContent = `$${balance.toFixed(2)}`;
 
     playSound('cashout');
-    confetti({ particleCount: 100, spread: 80, origin: { y: 0.6 } });
+    confetti({ particleCount: 120, spread: 90, origin: { y: 0.6 } });
     showStakeWinAnimation(finalMult, winAmount);
     addHistoryItem(true, finalMult, winAmount);
 
