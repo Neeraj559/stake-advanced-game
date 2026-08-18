@@ -5,14 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>3D Glass Bridge - Stake Edition</title>
     <link rel="stylesheet" href="style.css">
-    <!-- External Libraries -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
 </head>
 <body>
     <div class="stage-wrapper">
-        <!-- Top Bar -->
         <div class="top-bar">
             <span class="brand-title">GLASS BRIDGE 3D</span>
             <div class="top-actions">
@@ -25,20 +23,17 @@
             </div>
         </div>
 
-        <!-- Mode Select -->
         <div class="mode-tabs">
             <button class="mode-tab active" id="tab-manual">Manual</button>
             <button class="mode-tab" id="tab-auto">Auto-Play</button>
         </div>
 
-        <!-- Multiplier Progress Bar -->
+        <!-- Dynamic Multiplier Bar -->
         <div class="multiplier-bar-container" id="mult-bar"></div>
 
-        <!-- 3D Viewport Area -->
         <div class="viewport-3d" id="viewport">
             <div class="step-hud-badge" id="step-hud">MEDIUM • STEP 1 / 13 • 1.18x</div>
 
-            <!-- Stake Win Banner Overlay -->
             <div class="stake-win-card" id="stake-win-card">
                 <div class="win-card-inner">
                     <div class="win-multiplier" id="win-multiplier">1.18×</div>
@@ -50,11 +45,9 @@
                 </div>
             </div>
 
-            <!-- In-game Action Controls -->
             <div class="decision-overlay" id="decision-buttons"></div>
         </div>
 
-        <!-- Auto Config Box (Hidden by default) -->
         <div class="auto-row" id="auto-config-box" style="display: none;">
             <div class="auto-field">
                 <span class="lbl">NUMBER OF BETS</span>
@@ -66,7 +59,6 @@
             </div>
         </div>
 
-        <!-- Control Panel -->
         <div class="control-dashboard">
             <div class="difficulty-pill-box">
                 <button class="diff-btn" data-diff="easy">EASY</button>
@@ -96,14 +88,12 @@
             <button class="main-action-btn btn-start" id="main-btn">START CROSSING</button>
         </div>
 
-        <!-- History Ledger -->
         <div class="history-container">
             <div class="history-title">RECENT BETS</div>
             <div class="history-list" id="history-list"></div>
         </div>
     </div>
 
-    <!-- Provably Fair Modal -->
     <div class="modal-backdrop" id="fairness-modal">
         <div class="modal-content">
             <div class="modal-header">

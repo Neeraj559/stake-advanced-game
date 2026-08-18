@@ -1,662 +1,510 @@
+// ---------------- GLOBAL STATE & CONFIG ----------------
 const TOTAL_STEPS = 13;
 const MAX_BET_LIMIT = 10000;
 
 const CONFIGS = {
     easy: {
-        panels: 3,
-        safeCount: 2,
-        multipliers: [1.15, 1.30, 1.50, 1.80, 2.20, 2.80, 3.60, 4.80, 6.50, 9.00, 13.00, 18.00, 25.00],
-        offsets: [-1.15, 0, 1.15],
-        labels: ['LEFT', 'CENTER', 'RIGHT']
+        panels: 2,
+        safe: 1,
+        multipliers: [1.18, 1.40, 1.75, 2.15, 2.70, 3.40, 4.30, 5.50, 7.00, 9.00, 11.50, 15.00, 20.00]
     },
     medium: {
         panels: 2,
-        safeCount: 1,
-        multipliers: [1.18, 1.40, 1.75, 2.25, 3.00, 4.20, 6.00, 9.00, 14.00, 22.00, 38.00, 62.00, 100.00],
-        offsets: [-0.95, 0.95],
-        labels: ['LEFT', 'RIGHT']
+        safe: 1,
+        multipliers: [1.18, 1.40, 1.75, 2.15, 2.70, 3.40, 4.30, 5.50, 7.00, 9.00, 11.50, 15.00, 20.00]
     },
     hard: {
         panels: 3,
-        safeCount: 1,
-        multipliers: [1.25, 1.65, 2.30, 3.30, 5.00, 8.00, 13.50, 24.00, 45.00, 90.00, 180.00, 320.00, 500.00],
-        offsets: [-1.15, 0, 1.15],
-        labels: ['LEFT', 'CENTER', 'RIGHT']
+        safe: 1,
+        multipliers: [1.45, 2.15, 3.25, 4.90, 7.40, 11.20, 17.00, 26.00, 40.00, 62.00, 95.00, 145.00, 230.00]
     },
     extreme: {
         panels: 4,
-        safeCount: 1,
-        multipliers: [1.35, 1.95, 3.10, 5.20, 8.90, 15.50, 28.00, 52.00, 105.00, 240.00, 580.00, 1550.00, 5000.00],
-        offsets: [-1.4, -0.47, 0.47, 1.4],
-        labels: ['P1', 'P2', 'P3', 'P4']
+        safe: 1,
+        multipliers: [1.95, 3.85, 7.70, 15.40, 31.00, 62.00, 125.00, 250.00, 500.00, 1000.00, 2000.00, 4000.00, 8000.00]
     }
 };
 
 let currentDiff = 'medium';
-let balance = 1000;
+let playMode = 'manual';
+let gameState = 'IDLE'; // IDLE, PLAYING, JUMPING, ENDED
+let balance = 1000.00;
 let betAmount = 10;
 let currentStep = 0;
-let safePanelsMatrix = [];
-let gameState = 'IDLE';
-
-// Auto Play State
-let playMode = 'manual';
-let autoRemainingRounds = 0;
-let autoTargetSteps = 3;
-
-// Provably Fair State
-let nonce = 0;
-let currentServerSeed = '';
-
-// Web Audio & Synth
-const AudioCtx = window.AudioContext || window.webkitAudioContext;
-let audio = null;
-let ambientGain = null;
 let soundEnabled = true;
+let bridgePattern = [];
 
-function initAudio() {
-    if (!audio) {
-        audio = new AudioCtx();
-        try {
-            const ambientOsc = audio.createOscillator();
-            ambientGain = audio.createGain();
-            ambientOsc.type = 'sine';
-            ambientOsc.frequency.setValueAtTime(55, audio.currentTime);
-            ambientGain.gain.setValueAtTime(0.03, audio.currentTime);
-            ambientOsc.connect(ambientGain);
-            ambientGain.connect(audio.destination);
-            ambientOsc.start();
-        } catch(e) {}
+// Auto-play counters
+let autoRemainingRounds = 0;
+let autoTargetStep = 3;
+
+// Audio Context Web Audio Synthesizer
+let audioCtx = null;
+function getAudioContext() {
+    if (!audioCtx) {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        audioCtx = new AudioContext();
     }
-    if (audio.state === 'suspended') audio.resume();
+    if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+    }
+    return audioCtx;
 }
 
-function playSound(type) {
+function playSynthesizedSound(type) {
     if (!soundEnabled) return;
-    initAudio();
-    const now = audio.currentTime;
-    const osc = audio.createOscillator();
-    const gain = audio.createGain();
-    osc.connect(gain);
-    gain.connect(audio.destination);
+    try {
+        const ctx = getAudioContext();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
 
-    if (type === 'jump') {
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(220, now);
-        osc.frequency.exponentialRampToValueAtTime(580, now + 0.16);
-        gain.gain.setValueAtTime(0.3, now);
-        gain.gain.linearRampToValueAtTime(0.01, now + 0.16);
-        osc.start(now);
-        osc.stop(now + 0.16);
-    } else if (type === 'land') {
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(520, now);
-        gain.gain.setValueAtTime(0.35, now);
-        gain.gain.linearRampToValueAtTime(0.01, now + 0.14);
-        osc.start(now);
-        osc.stop(now + 0.14);
-    } else if (type === 'shatter') {
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(200, now);
-        osc.frequency.exponentialRampToValueAtTime(20, now + 0.6);
-        gain.gain.setValueAtTime(0.6, now);
-        gain.gain.linearRampToValueAtTime(0.01, now + 0.6);
-        osc.start(now);
-        osc.stop(now + 0.6);
-    } else if (type === 'cashout') {
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(440, now);
-        osc.frequency.linearRampToValueAtTime(880, now + 0.4);
-        gain.gain.setValueAtTime(0.4, now);
-        gain.gain.linearRampToValueAtTime(0.01, now + 0.4);
-        osc.start(now);
-        osc.stop(now + 0.4);
-    }
+        const now = ctx.currentTime;
+        if (type === 'step') {
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(450, now);
+            osc.frequency.exponentialRampToValueAtTime(800, now + 0.08);
+            gain.gain.setValueAtTime(0.3, now);
+            gain.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
+            osc.start(now);
+            osc.stop(now + 0.08);
+        } else if (type === 'break') {
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(160, now);
+            osc.frequency.exponentialRampToValueAtTime(30, now + 0.28);
+            gain.gain.setValueAtTime(0.45, now);
+            gain.gain.exponentialRampToValueAtTime(0.01, now + 0.28);
+            osc.start(now);
+            osc.stop(now + 0.28);
+        } else if (type === 'win') {
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(523.25, now);
+            osc.frequency.setValueAtTime(659.25, now + 0.08);
+            osc.frequency.setValueAtTime(783.99, now + 0.16);
+            gain.gain.setValueAtTime(0.3, now);
+            gain.gain.exponentialRampToValueAtTime(0.01, now + 0.35);
+            osc.start(now);
+            osc.stop(now + 0.35);
+        }
+    } catch (e) {}
 }
 
-// ---------------- THREE.JS 3D SCENE ----------------
+// ---------------- DOM REFS ----------------
 const viewport = document.getElementById('viewport');
-const scene = new THREE.Scene();
-scene.fog = new THREE.FogExp2(0x020408, 0.02);
-
-const camera = new THREE.PerspectiveCamera(54, viewport.clientWidth / viewport.clientHeight, 0.1, 1000);
-const INITIAL_CAM = { x: 0, y: 3.6, z: 4.8, rx: -0.28 };
-camera.position.set(INITIAL_CAM.x, INITIAL_CAM.y, INITIAL_CAM.z);
-camera.rotation.x = INITIAL_CAM.rx;
-
-const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-renderer.setSize(viewport.clientWidth, viewport.clientHeight);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-viewport.appendChild(renderer.domElement);
-
-scene.add(new THREE.AmbientLight(0x4a6d88, 1.1));
-const dirLight = new THREE.DirectionalLight(0x00e7ff, 1.6);
-dirLight.position.set(8, 20, 8);
-scene.add(dirLight);
-
-const STEP_DISTANCE = 3.2;
-const bridgeSteps = [];
-const shardParticles = [];
-
-function createGlassTile(x, z, width = 1.1) {
-    const group = new THREE.Group();
-    const glassMat = new THREE.MeshPhysicalMaterial({
-        color: 0x00d2ff,
-        transparent: true,
-        opacity: 0.5,
-        roughness: 0.08,
-        metalness: 0.1,
-        transmission: 0.9,
-        ior: 1.5
-    });
-    const paneGeom = new THREE.BoxGeometry(width, 0.08, 1.8);
-    const pane = new THREE.Mesh(paneGeom, glassMat);
-    group.add(pane);
-
-    const frameGeom = new THREE.EdgesGeometry(paneGeom);
-    const frameMat = new THREE.LineBasicMaterial({ color: 0x00e7ff, linewidth: 2 });
-    const frame = new THREE.LineSegments(frameGeom, frameMat);
-    group.add(frame);
-
-    group.position.set(x, 0, z);
-    group.pane = pane;
-    group.frame = frame;
-    return group;
-}
-
-function build3DBridge() {
-    bridgeSteps.forEach(s => s.panels.forEach(p => scene.remove(p)));
-    bridgeSteps.length = 0;
-
-    const conf = CONFIGS[currentDiff];
-    const tileWidth = conf.panels === 4 ? 0.72 : conf.panels === 3 ? 0.95 : 1.25;
-
-    for (let i = 0; i < TOTAL_STEPS; i++) {
-        const z = -i * STEP_DISTANCE - 2.0;
-        const panels = [];
-
-        conf.offsets.forEach((x, panelIdx) => {
-            const tile = createGlassTile(x, z, tileWidth);
-            tile.userData = { stepIdx: i, panelIdx: panelIdx };
-            scene.add(tile);
-            panels.push(tile);
-        });
-
-        bridgeSteps.push({ panels, z });
-    }
-}
-build3DBridge();
-
-// Human Avatar Model
-const humanGroup = new THREE.Group();
-const skinMat = new THREE.MeshLambertMaterial({ color: 0xffdbac });
-const jacketMat = new THREE.MeshLambertMaterial({ color: 0x00ff88 });
-const pantsMat = new THREE.MeshLambertMaterial({ color: 0x101b26 });
-
-const head = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.26, 0.24), skinMat);
-head.position.y = 1.05;
-humanGroup.add(head);
-
-const torso = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.48, 0.24), jacketMat);
-torso.position.y = 0.68;
-humanGroup.add(torso);
-
-const leftLeg = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.44, 0.16), pantsMat);
-leftLeg.position.set(-0.1, 0.22, 0);
-humanGroup.add(leftLeg);
-
-const rightLeg = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.44, 0.16), pantsMat);
-rightLeg.position.set(0.1, 0.22, 0);
-humanGroup.add(rightLeg);
-
-humanGroup.position.set(0, 0.05, 0.8);
-scene.add(humanGroup);
-
-function triggerGlassShatter(x, y, z) {
-    const shardGeom = new THREE.TetrahedronGeometry(0.13, 0);
-    const shardMat = new THREE.MeshBasicMaterial({ color: 0x00e7ff, wireframe: true });
-
-    for (let i = 0; i < 36; i++) {
-        const shard = new THREE.Mesh(shardGeom, shardMat);
-        shard.position.set(x + (Math.random() - 0.5) * 0.9, y + 0.1, z + (Math.random() - 0.5) * 0.9);
-        shard.velocity = new THREE.Vector3(
-            (Math.random() - 0.5) * 0.22,
-            Math.random() * 0.14 + 0.05,
-            (Math.random() - 0.5) * 0.22
-        );
-        shard.rotSpeed = new THREE.Vector3(Math.random() * 0.2, Math.random() * 0.2, Math.random() * 0.2);
-        scene.add(shard);
-        shardParticles.push(shard);
-    }
-}
-
-function cameraShake(intensity = 0.15, duration = 0.3) {
-    const origY = camera.position.y;
-    const origX = camera.position.x;
-    gsap.to(camera.position, {
-        x: origX + (Math.random() - 0.5) * intensity,
-        y: origY + (Math.random() - 0.5) * intensity,
-        duration: 0.05,
-        repeat: Math.floor(duration / 0.05),
-        yoyo: true,
-        onComplete: () => {
-            camera.position.x = origX;
-            camera.position.y = origY;
-        }
-    });
-}
-
-function animate() {
-    requestAnimationFrame(animate);
-
-    if (gameState === 'PLAYING' || gameState === 'IDLE') {
-        humanGroup.position.y = 0.05 + Math.sin(Date.now() * 0.005) * 0.02;
-    }
-
-    for (let i = shardParticles.length - 1; i >= 0; i--) {
-        const s = shardParticles[i];
-        s.position.add(s.velocity);
-        s.velocity.y -= 0.012; // Gravity
-        s.rotation.x += s.rotSpeed.x;
-        s.rotation.y += s.rotSpeed.y;
-
-        if (s.position.y < -30) {
-            scene.remove(s);
-            shardParticles.splice(i, 1);
-        }
-    }
-
-    renderer.render(scene, camera);
-}
-animate();
-
-// ---------------- UI & GAME CONTROLS ----------------
 const balanceDisplay = document.getElementById('balance-display');
 const betInput = document.getElementById('bet-input');
 const mainBtn = document.getElementById('main-btn');
-const btnHalf = document.getElementById('btn-half');
-const btnDouble = document.getElementById('btn-double');
-const btnMax = document.getElementById('btn-max');
 const stepHud = document.getElementById('step-hud');
+const multBar = document.getElementById('mult-bar');
 const decisionButtons = document.getElementById('decision-buttons');
-const diffButtons = document.querySelectorAll('.diff-btn');
-const chipButtons = document.querySelectorAll('.chip-btn');
 const winCard = document.getElementById('stake-win-card');
 const winMultiplier = document.getElementById('win-multiplier');
 const winPayout = document.getElementById('win-payout');
 const historyList = document.getElementById('history-list');
-
-const tabManual = document.getElementById('tab-manual');
-const tabAuto = document.getElementById('tab-auto');
+const soundBtn = document.getElementById('sound-toggle-btn');
+const fairnessBtn = document.getElementById('fairness-btn');
+const fairnessModal = document.getElementById('fairness-modal');
+const closeModalBtn = document.getElementById('close-modal-btn');
+const serverSeedHash = document.getElementById('server-seed-hash');
+const clientSeed = document.getElementById('client-seed');
+const fairnessNonce = document.getElementById('fairness-nonce');
 const autoConfigBox = document.getElementById('auto-config-box');
 const autoRoundsInput = document.getElementById('auto-rounds-input');
 const autoStepsInput = document.getElementById('auto-steps-input');
 
-const fairnessBtn = document.getElementById('fairness-btn');
-const fairnessModal = document.getElementById('fairness-modal');
-const closeModalBtn = document.getElementById('close-modal-btn');
-const serverSeedHashInput = document.getElementById('server-seed-hash');
-const fairnessNonceInput = document.getElementById('fairness-nonce');
-const soundToggleBtn = document.getElementById('sound-toggle-btn');
+// ---------------- THREE.JS WORLD ----------------
+let scene, camera, renderer;
+let panels3D = [];
+let characterMesh;
+const STEP_DISTANCE = 3.2;
 
-function switchMode(mode) {
-    if (gameState === 'JUMPING') return;
-    playMode = mode;
+function initThree() {
+    scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x070e17, 0.035);
 
-    if (mode === 'manual') {
-        tabManual.classList.add('active');
-        tabAuto.classList.remove('active');
-        if (autoConfigBox) autoConfigBox.style.display = 'none';
-        if (gameState !== 'PLAYING') {
-            mainBtn.textContent = 'START CROSSING';
-            mainBtn.className = 'main-action-btn btn-start';
-        }
-    } else {
-        tabAuto.classList.add('active');
-        tabManual.classList.remove('active');
-        if (autoConfigBox) autoConfigBox.style.display = 'flex';
-        if (gameState !== 'PLAYING') {
-            mainBtn.textContent = 'START AUTO-PLAY';
-            mainBtn.className = 'main-action-btn btn-start';
-        }
+    const width = viewport.clientWidth;
+    const height = viewport.clientHeight;
+
+    camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
+    camera.position.set(0, 4.5, 7.5);
+    camera.lookAt(0, 0.5, 0);
+
+    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setSize(width, height);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    viewport.appendChild(renderer.domElement);
+
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.9);
+    scene.add(ambientLight);
+
+    const dirLight = new THREE.DirectionalLight(0x00e701, 1.2);
+    dirLight.position.set(5, 12, 10);
+    scene.add(dirLight);
+
+    // Player Token
+    const charGeo = new THREE.CylinderGeometry(0.35, 0.45, 0.25, 32);
+    const charMat = new THREE.MeshStandardMaterial({
+        color: 0x00e701,
+        emissive: 0x00e701,
+        emissiveIntensity: 0.6,
+        roughness: 0.2,
+        metalness: 0.8
+    });
+    characterMesh = new THREE.Mesh(charGeo, charMat);
+    characterMesh.position.set(0, 0.15, 2.5);
+    scene.add(characterMesh);
+
+    window.addEventListener('resize', onWindowResize);
+    animate();
+}
+
+function onWindowResize() {
+    if (!renderer || !viewport) return;
+    const width = viewport.clientWidth;
+    const height = viewport.clientHeight;
+    camera.aspect = width / height;
+    camera.updateProjectionMatrix();
+    renderer.setSize(width, height);
+}
+
+function animate() {
+    requestAnimationFrame(animate);
+    if (renderer && scene && camera) {
+        renderer.render(scene, camera);
     }
 }
 
-tabManual.onclick = (e) => { e.stopPropagation(); switchMode('manual'); };
-tabAuto.onclick = (e) => { e.stopPropagation(); switchMode('auto'); };
+// ---------------- 3D BRIDGE BUILDER ----------------
+function build3DBridge() {
+    panels3D.forEach(row => row.forEach(p => scene.remove(p)));
+    panels3D = [];
 
-soundToggleBtn.addEventListener('click', () => {
-    soundEnabled = !soundEnabled;
-    soundToggleBtn.textContent = soundEnabled ? '🔊' : '🔇';
-    if (ambientGain && audio) {
-        ambientGain.gain.setValueAtTime(soundEnabled ? 0.03 : 0, audio.currentTime);
+    const numPanels = CONFIGS[currentDiff].panels;
+    const panelWidth = numPanels === 2 ? 1.4 : numPanels === 3 ? 1.0 : 0.8;
+    const spacing = panelWidth + 0.25;
+
+    for (let r = 0; r < TOTAL_STEPS; r++) {
+        const rowPanels = [];
+        const zPos = -r * STEP_DISTANCE;
+
+        for (let c = 0; c < numPanels; c++) {
+            const xPos = (c - (numPanels - 1) / 2) * spacing;
+            const geo = new THREE.BoxGeometry(panelWidth, 0.1, 1.8);
+            const mat = new THREE.MeshStandardMaterial({
+                color: 0x1a334d,
+                roughness: 0.1,
+                metalness: 0.8,
+                transparent: true,
+                opacity: 0.8
+            });
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.position.set(xPos, 0, zPos);
+            scene.add(mesh);
+            rowPanels.push(mesh);
+        }
+        panels3D.push(rowPanels);
     }
-});
 
-fairnessBtn.addEventListener('click', () => fairnessModal.style.display = 'flex');
-closeModalBtn.addEventListener('click', () => fairnessModal.style.display = 'none');
-
-function generateProvablyFairSeed() {
-    nonce++;
-    currentServerSeed = 'seed_' + Math.random().toString(36).substring(2) + Date.now().toString(36);
-    serverSeedHashInput.value = 'hash_' + Array.from(currentServerSeed).reduce((h, c) => (h = ((h << 5) - h) + c.charCodeAt(0)) | 0, 0).toString(16);
-    fairnessNonceInput.value = nonce;
-}
-generateProvablyFairSeed();
-
-function showStakeWinAnimation(multiplier, amount) {
-    winMultiplier.textContent = `${multiplier.toFixed(2)}×`;
-    winPayout.textContent = `$${amount.toFixed(2)}`;
-
-    gsap.killTweensOf(winCard);
-    gsap.timeline()
-        .fromTo(winCard, 
-            { scale: 0.2, opacity: 0, rotate: -6 }, 
-            { scale: 1, opacity: 1, rotate: 0, duration: 0.4, ease: "back.out(2.2)" }
-        )
-        .to(winCard, {
-            scale: 0.8,
-            opacity: 0,
-            delay: 2.3,
-            duration: 0.3,
-            ease: "power2.in"
-        });
+    resetPlayerPosition();
 }
 
-function addHistoryItem(isWin, mult, amt) {
-    const item = document.createElement('div');
-    item.className = `history-item ${isWin ? 'win' : 'loss'}`;
-    item.innerHTML = `
-        <span>${isWin ? mult.toFixed(2) + 'x' : '0.00x'}</span>
-        <span>${isWin ? '+$' + amt.toFixed(2) : '-$' + betAmount.toFixed(2)}</span>
-    `;
-    historyList.prepend(item);
-    if (historyList.children.length > 10) historyList.removeChild(historyList.lastChild);
+function resetPlayerPosition() {
+    gsap.killTweensOf(characterMesh.position);
+    gsap.killTweensOf(camera.position);
+    characterMesh.visible = true;
+    characterMesh.position.set(0, 0.15, 2.5);
+    camera.position.set(0, 4.5, 7.5);
+    camera.lookAt(0, 0.5, 0);
+}
+
+// ---------------- HUD & CONTROLS ----------------
+function formatMultiplier(val) {
+    return Number(val).toFixed(2);
+}
+
+function renderMultiplierBar() {
+    if (!multBar) return;
+    multBar.innerHTML = '';
+    const mults = CONFIGS[currentDiff].multipliers;
+    mults.forEach((m, idx) => {
+        const pill = document.createElement('div');
+        pill.className = `multiplier-pill ${idx === currentStep ? 'active' : idx < currentStep ? 'passed' : ''}`;
+        pill.textContent = `${formatMultiplier(m)}x`;
+        multBar.appendChild(pill);
+    });
+}
+
+function updateHud() {
+    const mult = CONFIGS[currentDiff].multipliers[currentStep] || 1;
+    if (stepHud) {
+        stepHud.textContent = `${currentDiff.toUpperCase()} • STEP ${currentStep + 1} / ${TOTAL_STEPS} • ${formatMultiplier(mult)}x`;
+    }
+    renderMultiplierBar();
 }
 
 function renderDecisionButtons() {
     decisionButtons.innerHTML = '';
-    const conf = CONFIGS[currentDiff];
-    conf.labels.forEach((label, idx) => {
+    if (gameState !== 'PLAYING' || playMode !== 'manual') return;
+
+    const numPanels = CONFIGS[currentDiff].panels;
+    const names = ['LEFT', 'MIDDLE-LEFT', 'MIDDLE-RIGHT', 'RIGHT'];
+
+    for (let i = 0; i < numPanels; i++) {
         const btn = document.createElement('button');
-        btn.className = 'choice-btn';
-        btn.textContent = label;
-        btn.disabled = true;
-        btn.addEventListener('click', () => makeStep(idx));
+        btn.className = 'btn-panel-choice';
+        btn.textContent = numPanels === 2 ? (i === 0 ? 'LEFT' : 'RIGHT') : `PANEL ${i + 1}`;
+        btn.onclick = () => makeStep(i);
         decisionButtons.appendChild(btn);
-    });
-}
-renderDecisionButtons();
-
-diffButtons.forEach(btn => {
-    btn.addEventListener('click', () => {
-        if (gameState === 'PLAYING' || gameState === 'JUMPING') return;
-        diffButtons.forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        currentDiff = btn.dataset.diff;
-        build3DBridge();
-        renderDecisionButtons();
-        updateHud();
-    });
-});
-
-chipButtons.forEach(chip => {
-    chip.addEventListener('click', () => {
-        if (gameState === 'PLAYING' || gameState === 'JUMPING') return;
-        const amt = parseFloat(chip.dataset.amt);
-        betInput.value = Math.min(amt, balance, MAX_BET_LIMIT);
-    });
-});
-
-btnHalf.addEventListener('click', () => {
-    if (gameState === 'PLAYING' || gameState === 'JUMPING') return;
-    betInput.value = Math.max(1, Math.floor(parseFloat(betInput.value) / 2));
-});
-
-btnDouble.addEventListener('click', () => {
-    if (gameState === 'PLAYING' || gameState === 'JUMPING') return;
-    const doubled = parseFloat(betInput.value) * 2;
-    betInput.value = Math.min(doubled, balance, MAX_BET_LIMIT);
-});
-
-btnMax.addEventListener('click', () => {
-    if (gameState === 'PLAYING' || gameState === 'JUMPING') return;
-    betInput.value = Math.min(balance, MAX_BET_LIMIT);
-});
-
-mainBtn.addEventListener('click', handleMainAction);
-
-function formatMultiplier(mult) {
-    if (mult >= 1000) return `${(mult / 1000).toFixed(1)}k`;
-    return mult.toFixed(2);
-}
-
-function updateHud() {
-    const mult = CONFIGS[currentDiff].multipliers[currentStep];
-    stepHud.textContent = `${currentDiff.toUpperCase()} • STEP ${currentStep + 1} / ${TOTAL_STEPS} • ${formatMultiplier(mult)}x`;
-}
-
-function handleMainAction() {
-    if (gameState === 'IDLE' || gameState === 'ENDED') {
-        betAmount = parseFloat(betInput.value);
-        if (isNaN(betAmount) || betAmount <= 0 || betAmount > balance || betAmount > MAX_BET_LIMIT) return;
-
-        if (playMode === 'auto') {
-            autoRemainingRounds = parseInt(autoRoundsInput.value) || 1;
-            autoTargetSteps = Math.min(13, parseInt(autoStepsInput.value) || 3);
-        }
-
-        generateProvablyFairSeed();
-        gsap.to(winCard, { opacity: 0, scale: 0, duration: 0.15 });
-
-        balance -= betAmount;
-        balanceDisplay.textContent = `$${balance.toFixed(2)}`;
-        startNewGame();
-    } else if (gameState === 'PLAYING' && currentStep > 0 && playMode === 'manual') {
-        cashOut();
     }
 }
 
-function startNewGame() {
-    gameState = 'PLAYING';
-    currentStep = 0;
-    betInput.disabled = true;
-    diffButtons.forEach(b => b.disabled = true);
+// ---------------- PROVABLY FAIR SEED ----------------
+function generateProvablyFairSeed() {
+    const randomHex = Array.from({length: 64}, () => Math.floor(Math.random()*16).toString(16)).join('');
+    serverSeedHash.value = randomHex;
+    fairnessNonce.value = Math.floor(Math.random() * 900000 + 100000);
 
     const conf = CONFIGS[currentDiff];
-    safePanelsMatrix = [];
-
+    bridgePattern = [];
     for (let i = 0; i < TOTAL_STEPS; i++) {
-        const indices = Array.from({ length: conf.panels }, (_, k) => k);
-        const shuffled = indices.sort(() => 0.5 - Math.random());
-        safePanelsMatrix.push(shuffled.slice(0, conf.safeCount));
+        const safeIndex = Math.floor(Math.random() * conf.panels);
+        bridgePattern.push(safeIndex);
+    }
+}
+
+// ---------------- GAMEPLAY MECHANICS ----------------
+function startNewGame() {
+    if (balance < betAmount) {
+        alert("Insufficient balance!");
+        return;
     }
 
+    balance -= betAmount;
+    balanceDisplay.textContent = `$${balance.toFixed(2)}`;
+    currentStep = 0;
+    gameState = 'PLAYING';
+    generateProvablyFairSeed();
     build3DBridge();
     updateHud();
+    renderDecisionButtons();
 
-    gsap.to(humanGroup.position, { x: 0, y: 0.05, z: 0.8, duration: 0.4 });
-    gsap.to(humanGroup.rotation, { x: 0, y: 0, z: 0, duration: 0.4 });
-    gsap.to(camera.position, { x: INITIAL_CAM.x, y: INITIAL_CAM.y, z: INITIAL_CAM.z, duration: 0.4 });
-
-    highlightCurrentStep();
-
-    if (playMode === 'auto') {
-        mainBtn.textContent = `AUTO PLAYING (${autoRemainingRounds} LEFT)`;
-        mainBtn.className = 'main-action-btn btn-disabled';
-        setTimeout(autoBotStep, 600);
-    } else {
-        enableChoiceButtons(true);
-        mainBtn.textContent = 'CHOOSE A PANEL';
-        mainBtn.className = 'main-action-btn btn-disabled';
-    }
-}
-
-function autoBotStep() {
-    if (gameState !== 'PLAYING') return;
-    const conf = CONFIGS[currentDiff];
-    const randomChoice = Math.floor(Math.random() * conf.panels);
-    makeStep(randomChoice);
-}
-
-function enableChoiceButtons(enable) {
-    Array.from(decisionButtons.children).forEach(btn => btn.disabled = !enable);
-}
-
-function highlightCurrentStep() {
-    if (currentStep >= TOTAL_STEPS) return;
-    const step = bridgeSteps[currentStep];
-    step.panels.forEach(p => {
-        p.frame.material.color.setHex(0x00ff88);
-        gsap.to(p.pane.material, { opacity: 0.75, duration: 0.25, yoyo: true, repeat: 1 });
-    });
+    mainBtn.textContent = 'CHOOSE A PANEL';
+    mainBtn.className = 'main-action-btn btn-disabled';
+    winCard.classList.remove('show');
 }
 
 function makeStep(chosenIndex) {
     if (gameState !== 'PLAYING') return;
     gameState = 'JUMPING';
-    enableChoiceButtons(false);
 
-    const stepIndexNow = currentStep;
-    const conf = CONFIGS[currentDiff];
-    const targetX = conf.offsets[chosenIndex];
-    const targetZ = bridgeSteps[stepIndexNow].z;
-    const isSafe = safePanelsMatrix[stepIndexNow].includes(chosenIndex);
+    const targetPanel = panels3D[currentStep][chosenIndex];
+    const isSafe = (chosenIndex === bridgePattern[currentStep]);
 
-    playSound('jump');
+    // Jump Animation
+    gsap.to(characterMesh.position, {
+        x: targetPanel.position.x,
+        z: targetPanel.position.z,
+        duration: 0.3,
+        ease: "power2.out"
+    });
+    gsap.to(characterMesh.position, {
+        y: 1.2,
+        duration: 0.15,
+        yoyo: true,
+        repeat: 1,
+        ease: "power1.inOut"
+    });
 
-    // Dynamic Cinematic Jump Timeline
-    gsap.timeline()
-        .to(humanGroup.position, {
-            x: targetX,
-            z: targetZ,
-            duration: 0.44,
-            ease: "power1.inOut"
-        })
-        .to(humanGroup.position, {
-            y: 1.6,
-            duration: 0.22,
-            yoyo: true,
-            repeat: 1,
-            ease: "power2.out"
-        }, 0)
-        .to(humanGroup.rotation, {
-            x: -0.18,
-            duration: 0.22,
-            yoyo: true,
-            repeat: 1
-        }, 0)
-        .call(() => {
-            gsap.to(camera.position, { 
-                z: targetZ + 5.2, 
-                y: 3.5, 
-                x: targetX * 0.35, 
-                duration: 0.45, 
-                ease: "power2.out" 
-            });
+    // Camera track
+    gsap.to(camera.position, {
+        z: targetPanel.position.z + 7.5,
+        duration: 0.35,
+        ease: "power2.out"
+    });
 
-            if (isSafe) {
-                playSound('land');
-                const chosenGroup = bridgeSteps[stepIndexNow].panels[chosenIndex];
-                chosenGroup.pane.material.color.setHex(0x00ff88);
-                chosenGroup.frame.material.color.setHex(0x00ff88);
+    setTimeout(() => {
+        if (isSafe) {
+            playSynthesizedSound('step');
+            targetPanel.material.color.setHex(0x00e701);
+            targetPanel.material.opacity = 1;
 
-                // Neon pulse ripple
-                gsap.to(chosenGroup.scale, { x: 1.08, z: 1.08, duration: 0.12, yoyo: true, repeat: 1 });
+            currentStep++;
+            if (currentStep >= TOTAL_STEPS) {
+                cashout(true);
+            } else {
+                gameState = 'PLAYING';
+                updateHud();
+                renderDecisionButtons();
 
-                setTimeout(() => {
-                    bridgeSteps[stepIndexNow].panels.forEach((p, idx) => {
-                        if (!safePanelsMatrix[stepIndexNow].includes(idx)) {
-                            triggerGlassShatter(conf.offsets[idx], 0, targetZ);
-                            scene.remove(p);
-                        }
-                    });
-                }, 140);
+                const currentMult = CONFIGS[currentDiff].multipliers[currentStep - 1];
+                const currentPayout = (betAmount * currentMult).toFixed(2);
+                mainBtn.textContent = `CASHOUT $${currentPayout} (${formatMultiplier(currentMult)}x)`;
+                mainBtn.className = 'main-action-btn btn-cashout';
 
-                currentStep++;
-                const mult = conf.multipliers[currentStep - 1];
-                const winAmount = betAmount * mult;
-
-                if (currentStep === TOTAL_STEPS || (playMode === 'auto' && currentStep >= autoTargetSteps)) {
-                    cashOut();
-                } else {
-                    updateHud();
-                    highlightCurrentStep();
-                    gameState = 'PLAYING';
-
-                    if (playMode === 'auto') {
-                        setTimeout(autoBotStep, 500);
+                if (playMode === 'auto') {
+                    if (currentStep >= autoTargetStep) {
+                        cashout(false);
                     } else {
-                        enableChoiceButtons(true);
-                        mainBtn.textContent = `CASHOUT $${winAmount.toFixed(2)} (${formatMultiplier(mult)}x)`;
-                        mainBtn.className = 'main-action-btn btn-cashout';
+                        setTimeout(() => {
+                            const nextChoice = Math.floor(Math.random() * CONFIGS[currentDiff].panels);
+                            makeStep(nextChoice);
+                        }, 400);
                     }
                 }
-            } else {
-                playSound('shatter');
-                cameraShake(0.22, 0.35);
-                const brokenGroup = bridgeSteps[stepIndexNow].panels[chosenIndex];
-                triggerGlassShatter(targetX, 0, targetZ);
-                scene.remove(brokenGroup);
-
-                gsap.to(humanGroup.position, { y: -25, duration: 1.1, ease: "power2.in" });
-                gsap.to(humanGroup.rotation, { x: 4, z: 3, duration: 1.1 });
-
-                addHistoryItem(false, 0, 0);
-                endGame(false);
             }
-        });
+        } else {
+            playSynthesizedSound('break');
+            // Shatter Glass
+            gsap.to(targetPanel.position, { y: -8, duration: 0.6, ease: "power2.in" });
+            gsap.to(characterMesh.position, { y: -10, duration: 0.7, ease: "power2.in" });
+            setTimeout(() => {
+                endGame(false);
+            }, 600);
+        }
+    }, 320);
 }
 
-function cashOut() {
-    const finalMult = CONFIGS[currentDiff].multipliers[currentStep - 1];
-    const winAmount = betAmount * finalMult;
-    balance += winAmount;
+function cashout(isMaxWin = false) {
+    if (gameState !== 'PLAYING' && !isMaxWin) return;
+    const finalMult = CONFIGS[currentDiff].multipliers[currentStep - 1] || 1;
+    const payout = betAmount * finalMult;
+    balance += payout;
     balanceDisplay.textContent = `$${balance.toFixed(2)}`;
 
-    playSound('cashout');
-    confetti({ particleCount: 120, spread: 90, origin: { y: 0.6 } });
-    showStakeWinAnimation(finalMult, winAmount);
-    addHistoryItem(true, finalMult, winAmount);
+    playSynthesizedSound('win');
+    if (typeof confetti === 'function') confetti({ particleCount: 70, spread: 60, origin: { y: 0.6 } });
 
+    winMultiplier.textContent = `${formatMultiplier(finalMult)}×`;
+    winPayout.textContent = `$${payout.toFixed(2)}`;
+    winCard.classList.add('show');
+
+    addHistoryRecord(true, finalMult, payout);
     endGame(true);
 }
 
 function endGame(won) {
-    gameState = 'IDLE';
-    betInput.disabled = false;
-    diffButtons.forEach(b => b.disabled = false);
-    enableChoiceButtons(false);
+    gameState = 'ENDED';
+    decisionButtons.innerHTML = '';
 
-    if (playMode === 'auto' && autoRemainingRounds > 1 && balance >= betAmount) {
+    if (!won) {
+        addHistoryRecord(false, 0, betAmount);
+    }
+
+    if (playMode === 'auto' && autoRemainingRounds > 1) {
         autoRemainingRounds--;
         setTimeout(() => {
             if (playMode === 'auto') {
-                balance -= betAmount;
-                balanceDisplay.textContent = `$${balance.toFixed(2)}`;
-                generateProvablyFairSeed();
                 startNewGame();
+                setTimeout(() => {
+                    const nextChoice = Math.floor(Math.random() * CONFIGS[currentDiff].panels);
+                    makeStep(nextChoice);
+                }, 300);
             }
         }, 1200);
     } else {
-        mainBtn.textContent = playMode === 'auto' ? 'START AUTO-PLAY' : (won ? 'PLAY AGAIN' : 'TRY AGAIN');
+        mainBtn.textContent = 'START CROSSING';
         mainBtn.className = 'main-action-btn btn-start';
     }
 }
-// ---------------- KEYBOARD FAST-PLAY SHORTCUTS ----------------
+
+function addHistoryRecord(won, mult, amount) {
+    const item = document.createElement('div');
+    item.className = `history-item ${won ? 'win' : 'loss'}`;
+    item.innerHTML = `<span>${formatMultiplier(mult)}x</span><span>${won ? '+' : '-'}$${amount.toFixed(2)}</span>`;
+    historyList.prepend(item);
+}
+
+function handleMainAction() {
+    if (gameState === 'IDLE' || gameState === 'ENDED') {
+        if (playMode === 'auto') {
+            autoRemainingRounds = parseInt(autoRoundsInput.value) || 10;
+            autoTargetStep = parseInt(autoStepsInput.value) || 3;
+            startNewGame();
+            setTimeout(() => {
+                const nextChoice = Math.floor(Math.random() * CONFIGS[currentDiff].panels);
+                makeStep(nextChoice);
+            }, 300);
+        } else {
+            startNewGame();
+        }
+    } else if (gameState === 'PLAYING') {
+        if (currentStep > 0) cashout(false);
+    }
+}
+
+// ---------------- EVENT LISTENERS ----------------
+mainBtn.addEventListener('click', handleMainAction);
+
+document.querySelectorAll('.diff-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+        if (gameState === 'PLAYING' || gameState === 'JUMPING') return;
+        document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentDiff = btn.dataset.diff;
+        build3DBridge();
+        updateHud();
+    });
+});
+
+document.querySelectorAll('.chip-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        if (gameState === 'IDLE' || gameState === 'ENDED') {
+            betInput.value = btn.dataset.amt;
+            betAmount = parseFloat(btn.dataset.amt);
+        }
+    });
+});
+
+document.getElementById('btn-half').addEventListener('click', () => {
+    betInput.value = Math.max(1, Math.floor(parseFloat(betInput.value) / 2));
+    betAmount = parseFloat(betInput.value);
+});
+document.getElementById('btn-double').addEventListener('click', () => {
+    betInput.value = Math.min(parseFloat(betInput.value) * 2, balance, MAX_BET_LIMIT);
+    betAmount = parseFloat(betInput.value);
+});
+document.getElementById('btn-max').addEventListener('click', () => {
+    betInput.value = Math.min(balance, MAX_BET_LIMIT);
+    betAmount = parseFloat(betInput.value);
+});
+
+betInput.addEventListener('input', () => {
+    betAmount = Math.max(1, Math.min(parseFloat(betInput.value) || 1, MAX_BET_LIMIT));
+});
+
+document.getElementById('tab-manual').addEventListener('click', () => {
+    playMode = 'manual';
+    document.getElementById('tab-manual').classList.add('active');
+    document.getElementById('tab-auto').classList.remove('active');
+    autoConfigBox.style.display = 'none';
+    renderDecisionButtons();
+});
+document.getElementById('tab-auto').addEventListener('click', () => {
+    playMode = 'auto';
+    document.getElementById('tab-auto').classList.add('active');
+    document.getElementById('tab-manual').classList.remove('active');
+    autoConfigBox.style.display = 'flex';
+    decisionButtons.innerHTML = '';
+});
+
+fairnessBtn.addEventListener('click', () => fairnessModal.classList.add('show'));
+closeModalBtn.addEventListener('click', () => fairnessModal.classList.remove('show'));
+soundBtn.addEventListener('click', () => {
+    soundEnabled = !soundEnabled;
+    soundBtn.textContent = soundEnabled ? '🔊' : '🔇';
+});
+
+// ---------------- KEYBOARD SHORTCUTS ----------------
 window.addEventListener('keydown', (e) => {
-    // Agar user kisi input box mein type kar raha ho toh shortcuts ignore honge
     if (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
 
     const key = e.key.toLowerCase();
-
-    // Spacebar -> Start / Cashout
     if (e.code === 'Space') {
         e.preventDefault();
         handleMainAction();
     }
 
-    // Panels Jump using Arrow Keys or Number Keys (1, 2, 3, 4)
     if (gameState === 'PLAYING' && playMode === 'manual') {
         const conf = CONFIGS[currentDiff];
         if (e.key === 'ArrowLeft' || e.key === '1') {
@@ -671,14 +519,24 @@ window.addEventListener('keydown', (e) => {
         }
     }
 
-    // Bet Modifier Hotkeys (Q = 1/2, W = 2x, E = Max)
     if (gameState === 'IDLE' || gameState === 'ENDED') {
         if (key === 'q') {
             betInput.value = Math.max(1, Math.floor(parseFloat(betInput.value) / 2));
+            betAmount = parseFloat(betInput.value);
         } else if (key === 'w') {
             betInput.value = Math.min(parseFloat(betInput.value) * 2, balance, MAX_BET_LIMIT);
+            betAmount = parseFloat(betInput.value);
         } else if (key === 'e') {
             betInput.value = Math.min(balance, MAX_BET_LIMIT);
+            betAmount = parseFloat(betInput.value);
         }
     }
+});
+
+// ---------------- INIT ON LOAD ----------------
+window.addEventListener('DOMContentLoaded', () => {
+    initThree();
+    generateProvablyFairSeed();
+    build3DBridge();
+    updateHud();
 });
