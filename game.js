@@ -28,24 +28,31 @@ const CONFIGS = {
 let currentDiff = 'medium';
 let playMode = 'manual';
 let gameState = 'IDLE'; // IDLE, PLAYING, JUMPING, ENDED
-let balance = 1000.00;
+
+// LocalStorage Persistent Balance Load
+let savedBalance = localStorage.getItem('stake_glass_balance');
+let balance = savedBalance !== null ? parseFloat(savedBalance) : 1000.00;
+
 let initialBaseBet = 10;
 let currentBet = 10;
 let currentStep = 0;
 let soundEnabled = true;
 let bridgePattern = [];
 
-// Auto-play State
 let isAutoRunning = false;
 let autoRemainingBets = 0;
 let autoTargetStep = 3;
-let autoStartingBalance = 1000.00;
-let autoWinAction = 'reset'; // 'reset' or 'increase'
-let autoLossAction = 'increase'; // 'reset' or 'increase'
+let autoStartingBalance = balance;
+let autoWinAction = 'reset';
+let autoLossAction = 'increase';
 
 let activeParticles = [];
 
-// ---------------- ADVANCED AUDIO SYNTHESIS ----------------
+function saveState() {
+    localStorage.setItem('stake_glass_balance', balance.toFixed(2));
+}
+
+// ---------------- AUDIO SYNTHESIS ----------------
 let audioCtx = null;
 function getAudioContext() {
     if (!audioCtx) {
@@ -154,7 +161,6 @@ const serverSeedHash = document.getElementById('server-seed-hash');
 const clientSeed = document.getElementById('client-seed');
 const fairnessNonce = document.getElementById('fairness-nonce');
 
-// Strategy DOM Elements
 const autoConfigBox = document.getElementById('auto-config-box');
 const autoRoundsInput = document.getElementById('auto-rounds-input');
 const autoStepsInput = document.getElementById('auto-steps-input');
@@ -166,7 +172,7 @@ const lossIncInput = document.getElementById('loss-inc-input');
 const stopProfitInput = document.getElementById('stop-profit-input');
 const stopLossInput = document.getElementById('stop-loss-input');
 
-// ---------------- THREE.JS SCENE ----------------
+// ---------------- THREE.JS WORLD ----------------
 let scene, camera, renderer;
 let panels3D = [];
 let characterMesh;
@@ -220,7 +226,7 @@ function onWindowResize() {
     renderer.setSize(width, height);
 }
 
-// ---------------- PARTICLES ----------------
+// ---------------- PARTICLE EFFECTS ----------------
 function triggerGlassShatter(position, width, length) {
     const shardCount = 28;
     const shardGeo = new THREE.TetrahedronGeometry(0.18, 0);
@@ -399,7 +405,7 @@ function generateProvablyFairSeed() {
     }
 }
 
-// ---------------- GAMEPLAY & STRATEGY ENGINE ----------------
+// ---------------- GAMEPLAY & STRATEGY ----------------
 function startNewGame() {
     if (balance < currentBet) {
         alert("Insufficient balance!");
@@ -408,6 +414,7 @@ function startNewGame() {
     }
 
     balance -= currentBet;
+    saveState();
     balanceDisplay.textContent = `$${balance.toFixed(2)}`;
     currentStep = 0;
     gameState = 'PLAYING';
@@ -430,7 +437,6 @@ function makeStep(chosenIndex) {
     const targetPanel = panels3D[currentStep][chosenIndex];
     const isSafe = (chosenIndex === bridgePattern[currentStep]);
 
-    // Jump Motion
     gsap.to(characterMesh.position, {
         x: targetPanel.position.x,
         z: targetPanel.position.z,
@@ -503,6 +509,7 @@ function cashout(isMaxWin = false) {
     const finalMult = CONFIGS[currentDiff].multipliers[currentStep - 1] || 1;
     const payout = currentBet * finalMult;
     balance += payout;
+    saveState();
     balanceDisplay.textContent = `$${balance.toFixed(2)}`;
 
     playSynthesizedSound('win');
@@ -525,7 +532,6 @@ function endGame(won) {
     }
 
     if (playMode === 'auto' && isAutoRunning) {
-        // Evaluate Stop Profit / Stop Loss Limits
         const profit = balance - autoStartingBalance;
         const stopProfit = parseFloat(stopProfitInput.value);
         const stopLoss = parseFloat(stopLossInput.value);
@@ -539,7 +545,6 @@ function endGame(won) {
             return;
         }
 
-        // Apply Betting Strategy
         if (won) {
             if (autoWinAction === 'reset') {
                 currentBet = initialBaseBet;
@@ -559,7 +564,6 @@ function endGame(won) {
         currentBet = parseFloat(currentBet.toFixed(2));
         betInput.value = currentBet;
 
-        // Rounds tracking (0 = infinite)
         if (autoRemainingBets > 1 || autoRemainingBets === 0) {
             if (autoRemainingBets > 1) autoRemainingBets--;
             
@@ -614,6 +618,23 @@ function addHistoryRecord(won, mult, amount) {
     item.className = `history-item ${won ? 'win' : 'loss'}`;
     item.innerHTML = `<span>${formatMultiplier(mult)}x</span><span>${won ? '+' : '-'}$${amount.toFixed(2)}</span>`;
     historyList.prepend(item);
+
+    // Save recent 10 history records in LocalStorage
+    const historyData = [];
+    document.querySelectorAll('.history-item').forEach((el, i) => {
+        if (i < 10) historyData.push(el.outerHTML);
+    });
+    localStorage.setItem('stake_glass_history', JSON.stringify(historyData));
+}
+
+function loadSavedHistory() {
+    const savedHist = localStorage.getItem('stake_glass_history');
+    if (savedHist) {
+        try {
+            const arr = JSON.parse(savedHist);
+            historyList.innerHTML = arr.join('');
+        } catch (e) {}
+    }
 }
 
 function handleMainAction() {
@@ -636,7 +657,6 @@ function handleMainAction() {
 // ---------------- EVENT LISTENERS ----------------
 mainBtn.addEventListener('click', handleMainAction);
 
-// Strategy Config Events
 winResetBtn.addEventListener('click', () => {
     autoWinAction = 'reset';
     winResetBtn.classList.add('active');
@@ -737,6 +757,8 @@ soundBtn.addEventListener('click', () => {
 
 // ---------------- INIT ON LOAD ----------------
 window.addEventListener('DOMContentLoaded', () => {
+    balanceDisplay.textContent = `$${balance.toFixed(2)}`;
+    loadSavedHistory();
     initThree();
     generateProvablyFairSeed();
     build3DBridge();
