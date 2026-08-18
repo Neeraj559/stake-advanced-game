@@ -50,6 +50,18 @@ let activeParticles = [];
 
 function saveState() {
     localStorage.setItem('stake_glass_balance', balance.toFixed(2));
+    if (gameState === 'PLAYING' || gameState === 'JUMPING') {
+        const activeGame = {
+            currentDiff,
+            currentBet,
+            currentStep,
+            bridgePattern,
+            gameState: 'PLAYING'
+        };
+        localStorage.setItem('stake_glass_active_round', JSON.stringify(activeGame));
+    } else {
+        localStorage.removeItem('stake_glass_active_round');
+    }
 }
 
 // ---------------- AUDIO SYNTHESIS ----------------
@@ -405,7 +417,59 @@ function generateProvablyFairSeed() {
     }
 }
 
-// ---------------- GAMEPLAY & STRATEGY ----------------
+// ---------------- GAMEPLAY & RESTORATION ----------------
+function restoreActiveGameIfAny() {
+    const savedRound = localStorage.getItem('stake_glass_active_round');
+    if (!savedRound) return false;
+
+    try {
+        const data = JSON.parse(savedRound);
+        if (data && data.gameState === 'PLAYING') {
+            currentDiff = data.currentDiff || 'medium';
+            currentBet = data.currentBet || 10;
+            currentStep = data.currentStep || 0;
+            bridgePattern = data.bridgePattern || [];
+            gameState = 'PLAYING';
+
+            document.querySelectorAll('.diff-btn').forEach(b => {
+                b.classList.toggle('active', b.dataset.diff === currentDiff);
+            });
+            betInput.value = currentBet;
+
+            build3DBridge();
+
+            // Reconstruct previous safe steps visuals & position
+            for (let step = 0; step < currentStep; step++) {
+                const safePanelIndex = bridgePattern[step];
+                if (panels3D[step] && panels3D[step][safePanelIndex]) {
+                    panels3D[step][safePanelIndex].material.color.setHex(0x00e701);
+                    panels3D[step][safePanelIndex].material.opacity = 1;
+                }
+            }
+
+            if (currentStep > 0) {
+                const lastSafeIdx = bridgePattern[currentStep - 1];
+                const lastPanel = panels3D[currentStep - 1][lastSafeIdx];
+                characterMesh.position.set(lastPanel.position.x, 0.15, lastPanel.position.z);
+                camera.position.set(0, 4.5, lastPanel.position.z + 7.5);
+
+                const currentMult = CONFIGS[currentDiff].multipliers[currentStep - 1];
+                const currentPayout = (currentBet * currentMult).toFixed(2);
+                mainBtn.textContent = `CASHOUT $${currentPayout} (${formatMultiplier(currentMult)}x)`;
+                mainBtn.className = 'main-action-btn btn-cashout';
+            } else {
+                mainBtn.textContent = 'CHOOSE A PANEL';
+                mainBtn.className = 'main-action-btn btn-disabled';
+            }
+
+            updateHud();
+            renderDecisionButtons();
+            return true;
+        }
+    } catch (e) {}
+    return false;
+}
+
 function startNewGame() {
     if (balance < currentBet) {
         alert("Insufficient balance!");
@@ -414,11 +478,12 @@ function startNewGame() {
     }
 
     balance -= currentBet;
-    saveState();
-    balanceDisplay.textContent = `$${balance.toFixed(2)}`;
     currentStep = 0;
     gameState = 'PLAYING';
     generateProvablyFairSeed();
+    saveState();
+
+    balanceDisplay.textContent = `$${balance.toFixed(2)}`;
     build3DBridge();
     updateHud();
     renderDecisionButtons();
@@ -464,6 +529,8 @@ function makeStep(chosenIndex) {
             targetPanel.material.opacity = 1;
 
             currentStep++;
+            saveState();
+
             if (currentStep >= TOTAL_STEPS) {
                 cashout(true);
             } else {
@@ -509,6 +576,8 @@ function cashout(isMaxWin = false) {
     const finalMult = CONFIGS[currentDiff].multipliers[currentStep - 1] || 1;
     const payout = currentBet * finalMult;
     balance += payout;
+    
+    gameState = 'ENDED';
     saveState();
     balanceDisplay.textContent = `$${balance.toFixed(2)}`;
 
@@ -525,6 +594,7 @@ function cashout(isMaxWin = false) {
 
 function endGame(won) {
     gameState = 'ENDED';
+    saveState();
     decisionButtons.innerHTML = '';
 
     if (!won) {
@@ -619,7 +689,6 @@ function addHistoryRecord(won, mult, amount) {
     item.innerHTML = `<span>${formatMultiplier(mult)}x</span><span>${won ? '+' : '-'}$${amount.toFixed(2)}</span>`;
     historyList.prepend(item);
 
-    // Save recent 10 history records in LocalStorage
     const historyData = [];
     document.querySelectorAll('.history-item').forEach((el, i) => {
         if (i < 10) historyData.push(el.outerHTML);
@@ -733,8 +802,8 @@ document.getElementById('tab-manual').addEventListener('click', () => {
     document.getElementById('tab-manual').classList.add('active');
     document.getElementById('tab-auto').classList.remove('active');
     autoConfigBox.style.display = 'none';
-    mainBtn.textContent = 'START CROSSING';
-    mainBtn.className = 'main-action-btn btn-start';
+    mainBtn.textContent = (gameState === 'PLAYING' && currentStep > 0) ? `CASHOUT $${(currentBet * CONFIGS[currentDiff].multipliers[currentStep-1]).toFixed(2)}` : 'START CROSSING';
+    mainBtn.className = (gameState === 'PLAYING' && currentStep > 0) ? 'main-action-btn btn-cashout' : 'main-action-btn btn-start';
     renderDecisionButtons();
 });
 
@@ -761,6 +830,10 @@ window.addEventListener('DOMContentLoaded', () => {
     loadSavedHistory();
     initThree();
     generateProvablyFairSeed();
-    build3DBridge();
-    updateHud();
+
+    const restored = restoreActiveGameIfAny();
+    if (!restored) {
+        build3DBridge();
+        updateHud();
+    }
 });
