@@ -3,20 +3,37 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Stake Custom Slot Game</title>
+    <title>Stake VIP Slots</title>
     <link rel="stylesheet" href="style.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/7.3.2/pixi.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/7.2.4/pixi.min.js"></script>
 </head>
 <body>
-    <div id="game-wrapper">
-        <div id="game-canvas-container"></div>
-        <div id="ui-panel">
-            <div class="stat-box">Balance: $<span id="balance-val">1000.00</span></div>
-            <div class="stat-box">Bet: $<span id="bet-val">10.00</span></div>
-            <div class="stat-box">Last Win: $<span id="win-val">0.00</span></div>
-            <button id="spin-btn">SPIN</button>
+
+    <div class="game-container">
+        <div class="header-title">STAKE VIP SLOTS</div>
+        
+        <div id="canvas-container"></div>
+
+        <div class="controls-panel">
+            <div class="stat-box">
+                <span class="stat-label">Balance</span>
+                <span class="stat-value" id="balance-display">$1,000.00</span>
+            </div>
+
+            <div class="stat-box">
+                <span class="stat-label">Bet</span>
+                <span class="stat-value" id="bet-display">$10.00</span>
+            </div>
+
+            <div class="stat-box">
+                <span class="stat-label">Last Win</span>
+                <span class="stat-value win" id="win-display">$0.00</span>
+            </div>
+
+            <button id="spin-btn" class="btn-spin">SPIN</button>
         </div>
     </div>
+
     <script src="game.js"></script>
 </body>
 </html>

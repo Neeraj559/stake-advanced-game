@@ -1,60 +1,111 @@
-body {
+* {
+    box-sizing: border-box;
     margin: 0;
     padding: 0;
-    background-color: #0f212e;
-    color: #ffffff;
-    font-family: Arial, sans-serif;
+    font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    user-select: none;
+}
+
+body {
+    background: radial-gradient(circle at 50% 30%, #1a2c38 0%, #0f1923 100%);
+    min-height: 100vh;
     display: flex;
     justify-content: center;
     align-items: center;
-    min-height: 100vh;
+    color: #fff;
 }
 
-#game-wrapper {
+.game-container {
+    background: #0f212e;
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    border: 1px solid #213743;
     display: flex;
     flex-direction: column;
     align-items: center;
-    background: #1a2c38;
-    padding: 20px;
-    border-radius: 12px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-}
-
-#game-canvas-container {
-    width: 600px;
-    height: 400px;
-    background: #071824;
-    border-radius: 8px;
-    overflow: hidden;
-}
-
-#ui-panel {
-    margin-top: 15px;
-    display: flex;
     gap: 20px;
+}
+
+.header-title {
+    font-size: 24px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    color: #00e701;
+    text-shadow: 0 0 15px rgba(0, 231, 1, 0.4);
+}
+
+#canvas-container {
+    position: relative;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #071824;
+    border: 2px solid #2f4553;
+    box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.8);
+}
+
+.controls-panel {
+    display: flex;
+    justify-content: space-between;
     align-items: center;
+    width: 100%;
+    background: #213743;
+    padding: 12px 20px;
+    border-radius: 12px;
+    gap: 15px;
 }
 
 .stat-box {
-    font-size: 14px;
-    font-weight: bold;
-    background: #213743;
-    padding: 10px 15px;
-    border-radius: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
 }
 
-#spin-btn {
-    background-color: #00e701;
-    color: #011301;
-    border: none;
-    padding: 12px 28px;
+.stat-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: #b1bad3;
+    text-transform: uppercase;
+}
+
+.stat-value {
     font-size: 16px;
-    font-weight: bold;
-    border-radius: 6px;
-    cursor: pointer;
-    transition: transform 0.1s ease;
+    font-weight: 700;
+    color: #ffffff;
 }
 
-#spin-btn:active {
-    transform: scale(0.95);
+.stat-value.win {
+    color: #00e701;
+    text-shadow: 0 0 8px rgba(0, 231, 1, 0.6);
+}
+
+.btn-spin {
+    background: #00e701;
+    color: #013e00;
+    font-size: 16px;
+    font-weight: 800;
+    border: none;
+    padding: 12px 36px;
+    border-radius: 8px;
+    cursor: pointer;
+    box-shadow: 0 4px 0 #009901, 0 0 20px rgba(0, 231, 1, 0.3);
+    transition: all 0.1s ease;
+    text-transform: uppercase;
+}
+
+.btn-spin:hover:not(:disabled) {
+    background: #1aff1b;
+    transform: translateY(-1px);
+}
+
+.btn-spin:active:not(:disabled) {
+    transform: translateY(3px);
+    box-shadow: 0 1px 0 #009901;
+}
+
+.btn-spin:disabled {
+    background: #2f4553;
+    color: #557086;
+    box-shadow: none;
+    cursor: not-allowed;
 }
