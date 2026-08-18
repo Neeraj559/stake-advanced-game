@@ -4,21 +4,21 @@ const CONFIGS = {
     easy: {
         panels: 3,
         safeCount: 2,
-        multipliers: [1.18, 1.42, 1.75, 2.20, 2.85, 3.80, 5.20, 7.40, 9.80, 12.50, 15.00, 18.50, 25.00],
+        multipliers: [1.15, 1.30, 1.50, 1.80, 2.20, 2.80, 3.60, 4.80, 6.50, 9.00, 13.00, 18.00, 25.00],
         offsets: [-1.15, 0, 1.15],
         labels: ['LEFT', 'CENTER', 'RIGHT']
     },
     medium: {
         panels: 2,
         safeCount: 1,
-        multipliers: [1.96, 3.84, 7.52, 14.75, 28.90, 56.65, 111.00, 217.50, 426.00, 835.00, 1636.00, 3580.00, 7850.00],
+        multipliers: [1.18, 1.40, 1.75, 2.25, 3.00, 4.20, 6.00, 9.00, 14.00, 22.00, 38.00, 62.00, 100.00],
         offsets: [-0.95, 0.95],
         labels: ['LEFT', 'RIGHT']
     },
     hard: {
         panels: 3,
         safeCount: 1,
-        multipliers: [2.94, 8.64, 25.40, 74.70, 219.60, 645.70, 1898.00, 5580.00, 16400.00, 48200.00, 141700.00, 442000.00, 1510000.00],
+        multipliers: [1.25, 1.65, 2.30, 3.30, 5.00, 8.00, 13.50, 24.00, 45.00, 90.00, 180.00, 320.00, 500.00],
         offsets: [-1.15, 0, 1.15],
         labels: ['LEFT', 'CENTER', 'RIGHT']
     },
@@ -38,7 +38,7 @@ let currentStep = 0;
 let safePanelsMatrix = [];
 let gameState = 'IDLE';
 
-// Web Audio Synth FX
+// Web Audio FX
 const AudioCtx = window.AudioContext || window.webkitAudioContext;
 let audio = null;
 
@@ -54,15 +54,15 @@ function playSound(type) {
     if (type === 'jump') {
         osc.type = 'sine';
         osc.frequency.setValueAtTime(240, now);
-        osc.frequency.exponentialRampToValueAtTime(540, now + 0.2);
-        gain.gain.setValueAtTime(0.3, now);
-        gain.gain.linearRampToValueAtTime(0.01, now + 0.2);
+        osc.frequency.exponentialRampToValueAtTime(540, now + 0.18);
+        gain.gain.setValueAtTime(0.25, now);
+        gain.gain.linearRampToValueAtTime(0.01, now + 0.18);
         osc.start(now);
-        osc.stop(now + 0.2);
+        osc.stop(now + 0.18);
     } else if (type === 'land') {
         osc.type = 'triangle';
         osc.frequency.setValueAtTime(460, now);
-        gain.gain.setValueAtTime(0.35, now);
+        gain.gain.setValueAtTime(0.3, now);
         gain.gain.linearRampToValueAtTime(0.01, now + 0.12);
         osc.start(now);
         osc.stop(now + 0.12);
@@ -85,68 +85,78 @@ function playSound(type) {
     }
 }
 
-// ---------------- THREE.JS 3D MOUNTAIN ABYSS SCENE ----------------
+// ---------------- THREE.JS 3D SCENE ----------------
 const viewport = document.getElementById('viewport');
 const scene = new THREE.Scene();
-scene.fog = new THREE.FogExp2(0x040810, 0.022);
+scene.fog = new THREE.FogExp2(0x02060e, 0.018);
 
-const camera = new THREE.PerspectiveCamera(52, viewport.clientWidth / viewport.clientHeight, 0.1, 1000);
-const INITIAL_CAM_POS = { x: 0, y: 3.4, z: 4.8 };
+const camera = new THREE.PerspectiveCamera(54, viewport.clientWidth / viewport.clientHeight, 0.1, 1000);
+const INITIAL_CAM_POS = { x: 0, y: 3.5, z: 4.6 };
 camera.position.set(INITIAL_CAM_POS.x, INITIAL_CAM_POS.y, INITIAL_CAM_POS.z);
-camera.lookAt(0, 1.0, -4);
+camera.lookAt(0, 0.8, -8);
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
 renderer.setSize(viewport.clientWidth, viewport.clientHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 viewport.appendChild(renderer.domElement);
 
-// Mountain Cliffs & Abyss Walls
-function buildMountainValley() {
-    const rockMat = new THREE.MeshStandardMaterial({ color: 0x08101a, roughness: 0.9, metalness: 0.1, flatShading: true });
-    
-    // Left Mountain Wall
-    const leftMtnGeom = new THREE.ConeGeometry(9, 45, 6);
-    const leftMtn = new THREE.Mesh(leftMtnGeom, rockMat);
-    leftMtn.position.set(-11, 2, -22);
-    leftMtn.rotation.y = 0.4;
-    scene.add(leftMtn);
+// Mountain Cliffs with Visible Edge Silhouettes
+function buildMountains() {
+    const rockMat = new THREE.MeshStandardMaterial({ 
+        color: 0x071524, 
+        roughness: 0.85, 
+        metalness: 0.2, 
+        flatShading: true 
+    });
+    const edgeMat = new THREE.LineBasicMaterial({ color: 0x00d2ff, opacity: 0.35, transparent: true });
 
-    // Right Mountain Wall
-    const rightMtnGeom = new THREE.ConeGeometry(10, 50, 7);
-    const rightMtn = new THREE.Mesh(rightMtnGeom, rockMat);
-    rightMtn.position.set(12, 4, -25);
-    rightMtn.rotation.y = -0.6;
-    scene.add(rightMtn);
+    // Left Cliffs
+    [-15, -35, -55].forEach((z, i) => {
+        const h = 45 + i * 10;
+        const geom = new THREE.ConeGeometry(9 + i * 2, h, 6);
+        const rock = new THREE.Mesh(geom, rockMat);
+        rock.position.set(-11 - i * 2, h / 2 - 15, z);
+        scene.add(rock);
 
-    // Deep Fog Layer Plane in Abyss
-    const fogGeom = new THREE.PlaneGeometry(60, 100);
-    const fogMat = new THREE.MeshBasicMaterial({ color: 0x03070d, transparent: true, opacity: 0.85 });
-    const fogPlane = new THREE.Mesh(fogGeom, fogMat);
-    fogPlane.rotation.x = -Math.PI / 2;
-    fogPlane.position.set(0, -6, -20);
-    scene.add(fogPlane);
+        const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geom), edgeMat);
+        edges.position.copy(rock.position);
+        scene.add(edges);
+    });
+
+    // Right Cliffs
+    [-18, -38, -58].forEach((z, i) => {
+        const h = 48 + i * 10;
+        const geom = new THREE.ConeGeometry(10 + i * 2, h, 7);
+        const rock = new THREE.Mesh(geom, rockMat);
+        rock.position.set(12 + i * 2, h / 2 - 15, z);
+        scene.add(rock);
+
+        const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geom), edgeMat);
+        edges.position.copy(rock.position);
+        scene.add(edges);
+    });
 }
-buildMountainValley();
+buildMountains();
 
-// Lighting
-scene.add(new THREE.AmbientLight(0xffffff, 0.65));
-const moonLight = new THREE.DirectionalLight(0x00d2ff, 1.2);
-moonLight.position.set(5, 15, 10);
-scene.add(moonLight);
+// Lights
+scene.add(new THREE.AmbientLight(0x3a5f8a, 0.7));
+const dirLight = new THREE.DirectionalLight(0x00e7ff, 1.4);
+dirLight.position.set(10, 20, 10);
+scene.add(dirLight);
 
-// Suspension Rails
+// Bridge Suspension Side Cables
 function createBridgeStructure() {
-    const railMat = new THREE.MeshStandardMaterial({ color: 0x162436, metalness: 0.85, roughness: 0.3 });
-    const beamGeom = new THREE.CylinderGeometry(0.05, 0.05, 52, 16);
+    const railMat = new THREE.MeshStandardMaterial({ color: 0x162c44, metalness: 0.9, roughness: 0.2 });
+    const beamGeom = new THREE.CylinderGeometry(0.05, 0.05, 75, 16);
 
     const leftRail = new THREE.Mesh(beamGeom, railMat);
     leftRail.rotation.x = Math.PI / 2;
-    leftRail.position.set(-1.8, -0.1, -22);
+    leftRail.position.set(-1.9, -0.15, -28);
     scene.add(leftRail);
 
     const rightRail = new THREE.Mesh(beamGeom, railMat);
     rightRail.rotation.x = Math.PI / 2;
-    rightRail.position.set(1.8, -0.1, -22);
+    rightRail.position.set(1.9, -0.15, -28);
     scene.add(rightRail);
 }
 createBridgeStructure();
@@ -160,13 +170,13 @@ function createGlassTile(x, z, width = 1.1) {
     const glassMat = new THREE.MeshPhysicalMaterial({
         color: 0x00d2ff,
         transparent: true,
-        opacity: 0.35,
+        opacity: 0.38,
         roughness: 0.1,
         metalness: 0.15,
-        transmission: 0.82,
-        ior: 1.52
+        transmission: 0.85,
+        ior: 1.5
     });
-    const paneGeom = new THREE.BoxGeometry(width, 0.08, 1.7);
+    const paneGeom = new THREE.BoxGeometry(width, 0.08, 1.8);
     const pane = new THREE.Mesh(paneGeom, glassMat);
     group.add(pane);
 
@@ -189,7 +199,7 @@ function build3DBridge() {
     const tileWidth = conf.panels === 4 ? 0.72 : conf.panels === 3 ? 0.95 : 1.25;
 
     for (let i = 0; i < TOTAL_STEPS; i++) {
-        const z = -i * STEP_DISTANCE - 1.8;
+        const z = -i * STEP_DISTANCE - 2.0;
         const panels = [];
 
         conf.offsets.forEach((x, panelIdx) => {
@@ -204,53 +214,45 @@ function build3DBridge() {
 }
 build3DBridge();
 
-// 3D Human Avatar (Low-Poly Stylized Humanoid)
+// 3D Human Avatar
 const humanGroup = new THREE.Group();
+const skinMat = new THREE.MeshLambertMaterial({ color: 0xffdbac });
+const jacketMat = new THREE.MeshLambertMaterial({ color: 0x00ff88 });
+const pantsMat = new THREE.MeshLambertMaterial({ color: 0x101b26 });
 
-const skinMat = new THREE.MeshLambertMaterial({ color: 0xffcc99 });
-const suitMat = new THREE.MeshLambertMaterial({ color: 0x00ff88 });
-const darkMat = new THREE.MeshLambertMaterial({ color: 0x111c26 });
-
-// Head
-const headGeom = new THREE.BoxGeometry(0.22, 0.24, 0.22);
-const head = new THREE.Mesh(headGeom, skinMat);
-head.position.y = 0.95;
+const head = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.26, 0.24), skinMat);
+head.position.y = 1.05;
 humanGroup.add(head);
 
-// Torso (Tracksuit Jacket)
-const torsoGeom = new THREE.BoxGeometry(0.34, 0.44, 0.22);
-const torso = new THREE.Mesh(torsoGeom, suitMat);
-torso.position.y = 0.62;
+const torso = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.48, 0.24), jacketMat);
+torso.position.y = 0.68;
 humanGroup.add(torso);
 
-// Legs
-const legGeom = new THREE.BoxGeometry(0.12, 0.4, 0.14);
-const leftLeg = new THREE.Mesh(legGeom, darkMat);
-leftLeg.position.set(-0.09, 0.2, 0);
+const leftLeg = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.44, 0.16), pantsMat);
+leftLeg.position.set(-0.1, 0.22, 0);
 humanGroup.add(leftLeg);
 
-const rightLeg = new THREE.Mesh(legGeom, darkMat);
-rightLeg.position.set(0.09, 0.2, 0);
+const rightLeg = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.44, 0.16), pantsMat);
+rightLeg.position.set(0.1, 0.22, 0);
 humanGroup.add(rightLeg);
 
 humanGroup.position.set(0, 0.05, 0.8);
 scene.add(humanGroup);
 
-// Glass Shatter Shards
 function triggerGlassShatter(x, y, z) {
-    const shardGeom = new THREE.TetrahedronGeometry(0.12, 0);
+    const shardGeom = new THREE.TetrahedronGeometry(0.14, 0);
     const shardMat = new THREE.MeshBasicMaterial({ color: 0x00e7ff, wireframe: true });
 
     for (let i = 0; i < 24; i++) {
         const shard = new THREE.Mesh(shardGeom, shardMat);
-        shard.position.set(x + (Math.random() - 0.5) * 0.7, y, z + (Math.random() - 0.5) * 0.7);
+        shard.position.set(x + (Math.random() - 0.5) * 0.8, y, z + (Math.random() - 0.5) * 0.8);
         shard.velocity = new THREE.Vector3((Math.random() - 0.5) * 0.14, Math.random() * 0.08 - 0.04, (Math.random() - 0.5) * 0.14);
         scene.add(shard);
         shardParticles.push(shard);
     }
 }
 
-// Raycasting (Direct Click on 3D Glass)
+// Raycaster for Direct 3D Touch
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
 
@@ -270,23 +272,20 @@ viewport.addEventListener('click', (e) => {
     }
 });
 
-// Render Loop
 function animate() {
     requestAnimationFrame(animate);
 
-    // Human Breathing Sway
     if (gameState === 'PLAYING' || gameState === 'IDLE') {
         humanGroup.position.y = 0.05 + Math.sin(Date.now() * 0.005) * 0.02;
     }
 
-    // Shard Physics in Abyss
     for (let i = shardParticles.length - 1; i >= 0; i--) {
         const s = shardParticles[i];
         s.position.add(s.velocity);
         s.velocity.y -= 0.008;
         s.rotation.x += 0.06;
 
-        if (s.position.y < -20) {
+        if (s.position.y < -25) {
             scene.remove(s);
             shardParticles.splice(i, 1);
         }
@@ -296,7 +295,7 @@ function animate() {
 }
 animate();
 
-// ---------------- GAME CONTROLS & LOGIC ----------------
+// ---------------- GAMEPLAY LOGIC ----------------
 const balanceDisplay = document.getElementById('balance-display');
 const betInput = document.getElementById('bet-input');
 const mainBtn = document.getElementById('main-btn');
@@ -348,7 +347,6 @@ btnMax.addEventListener('click', () => betInput.value = balance);
 mainBtn.addEventListener('click', handleMainAction);
 
 function formatMultiplier(mult) {
-    if (mult >= 1000000) return `${(mult / 1000000).toFixed(2)}M`;
     if (mult >= 1000) return `${(mult / 1000).toFixed(1)}k`;
     return mult.toFixed(2);
 }
@@ -389,7 +387,6 @@ function startNewGame() {
     build3DBridge();
     updateHud();
 
-    // Reset Human & Camera
     gsap.to(humanGroup.position, { x: 0, y: 0.05, z: 0.8, duration: 0.4 });
     gsap.to(humanGroup.rotation, { x: 0, y: 0, z: 0, duration: 0.4 });
     gsap.to(camera.position, { x: INITIAL_CAM_POS.x, y: INITIAL_CAM_POS.y, z: INITIAL_CAM_POS.z, duration: 0.4 });
@@ -415,46 +412,47 @@ function makeStep(chosenIndex) {
     gameState = 'JUMPING';
     enableChoiceButtons(false);
 
+    const stepIndexNow = currentStep;
     const conf = CONFIGS[currentDiff];
     const targetX = conf.offsets[chosenIndex];
-    const targetZ = bridgeSteps[currentStep].z;
-    const isSafe = safePanelsMatrix[currentStep].includes(chosenIndex);
+    const targetZ = bridgeSteps[stepIndexNow].z;
+    const isSafe = safePanelsMatrix[stepIndexNow].includes(chosenIndex);
 
     playSound('jump');
 
-    // Human Realistic Jump Arc
+    // Smooth forward arc jump
     gsap.timeline()
         .to(humanGroup.position, {
             x: targetX,
             z: targetZ,
-            duration: 0.45,
+            duration: 0.42,
             ease: "power1.inOut"
         })
         .to(humanGroup.position, {
-            y: 1.8,
-            duration: 0.225,
+            y: 1.5,
+            duration: 0.21,
             yoyo: true,
             repeat: 1,
             ease: "power2.out"
         }, 0)
         .call(() => {
-            gsap.to(camera.position, { z: targetZ + 5.2, y: 3.0, duration: 0.45 });
+            gsap.to(camera.position, { z: targetZ + 5.5, y: 3.4, duration: 0.45 });
 
             if (isSafe) {
                 playSound('land');
-                const chosenGroup = bridgeSteps[currentStep].panels[chosenIndex];
+                const chosenGroup = bridgeSteps[stepIndexNow].panels[chosenIndex];
                 chosenGroup.pane.material.color.setHex(0x00ff88);
                 chosenGroup.frame.material.color.setHex(0x00ff88);
 
-                // Auto-Shatter Fake Panels on this step after safe landing
+                // Shatter ONLY this step's trap panels
                 setTimeout(() => {
-                    bridgeSteps[currentStep].panels.forEach((p, idx) => {
-                        if (!safePanelsMatrix[currentStep].includes(idx)) {
+                    bridgeSteps[stepIndexNow].panels.forEach((p, idx) => {
+                        if (!safePanelsMatrix[stepIndexNow].includes(idx)) {
                             triggerGlassShatter(conf.offsets[idx], 0, targetZ);
                             scene.remove(p);
                         }
                     });
-                }, 200);
+                }, 150);
 
                 currentStep++;
                 const mult = conf.multipliers[currentStep - 1];
@@ -472,14 +470,14 @@ function makeStep(chosenIndex) {
                     mainBtn.className = 'main-action-btn btn-cashout';
                 }
             } else {
-                // Trap Fall: Human falls into Abyss
+                // Shatter selected trap panel & drop
                 playSound('shatter');
-                const brokenGroup = bridgeSteps[currentStep].panels[chosenIndex];
+                const brokenGroup = bridgeSteps[stepIndexNow].panels[chosenIndex];
                 triggerGlassShatter(targetX, 0, targetZ);
                 scene.remove(brokenGroup);
 
-                gsap.to(humanGroup.position, { y: -22, duration: 1.3, ease: "power2.in" });
-                gsap.to(humanGroup.rotation, { x: 3, z: 2, duration: 1.3 });
+                gsap.to(humanGroup.position, { y: -25, duration: 1.2, ease: "power2.in" });
+                gsap.to(humanGroup.rotation, { x: 3, z: 2, duration: 1.2 });
                 endGame(false);
             }
         });
